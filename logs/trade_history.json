@@ -1,0 +1,98 @@
+[
+  {
+    "timestamp": 1752597244.0372765,
+    "trade_id": "opp_1752597244037",
+    "path": "USDT->USDC->BTC->USDT",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "USDT->USDC->BTC->USDT",
+      "profit_rate": 0.0025,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 5000.0,
+      "timestamp": 1752597244.0372515
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752597244.039366,
+    "trade_id": "trade_1752597244039",
+    "path": "USDT->USDC->BTC->USDT",
+    "action": "trade_executed",
+    "investment_amount": 1000.0,
+    "final_amount": 1002.3,
+    "profit": 2.3,
+    "profit_rate": 0.0023,
+    "success": true,
+    "details": {
+      "opportunity": {
+        "path_name": "USDT->USDC->BTC->USDT",
+        "profit_rate": 0.0025,
+        "min_trade_amount": 100.0,
+        "max_trade_amount": 5000.0,
+        "timestamp": 1752597244.0372515
+      },
+      "result": {
+        "success": true,
+        "investment_amount": 1000.0,
+        "final_amount": 1002.3,
+        "actual_profit": 2.3,
+        "actual_profit_rate": 0.0023,
+        "trades": []
+      }
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752597244.0414033,
+    "trade_id": "opp_1752597244041",
+    "path": "USDT->BTC->USDC->USDT",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "USDT->BTC->USDC->USDT",
+      "profit_rate": 0.0018,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 3000.0,
+      "timestamp": 1752597214.0372543
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752597244.0430374,
+    "trade_id": "trade_1752597244043",
+    "path": "USDT->BTC->USDC->USDT",
+    "action": "trade_executed",
+    "investment_amount": 1500.0,
+    "final_amount": 1502.1,
+    "profit": 2.1,
+    "profit_rate": 0.0014,
+    "success": true,
+    "details": {
+      "opportunity": {
+        "path_name": "USDT->BTC->USDC->USDT",
+        "profit_rate": 0.0018,
+        "min_trade_amount": 100.0,
+        "max_trade_amount": 3000.0,
+        "timestamp": 1752597214.0372543
+      },
+      "result": {
+        "success": true,
+        "investment_amount": 1500.0,
+        "final_amount": 1502.1,
+        "actual_profit": 2.1,
+        "actual_profit_rate": 0.0014,
+        "trades": []
+      }
+    },
+    "error_message": null
+  }
+]

@@ -2,5 +2,6 @@ httpx==0.24.1
 websockets==11.0.3
 numpy==1.26.4
 rich==13.4.2
+psutil==5.9.5
 configparser
 pytest==7.4.0

@@ -8,6 +8,7 @@ import asyncio
 import logging
 import time
 import threading
+import psutil
 from typing import Dict, List, Optional, Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -18,6 +19,7 @@ from core.arbitrage_engine import ArbitrageEngine
 from core.trade_executor import TradeExecutor
 from core.risk_manager import RiskManager
 from config.config_manager import ConfigManager
+from utils.trade_logger import TradeLogger
 
 
 class TradingStatus(Enum):
@@ -44,6 +46,20 @@ class TradingStats:
     net_profit: float = 0.0
     last_opportunity_time: float = 0.0
     last_trade_time: float = 0.0
+    
+    # 新增性能指标
+    total_execution_time: float = 0.0
+    min_execution_time: float = float('inf')
+    max_execution_time: float = 0.0
+    avg_execution_time: float = 0.0
+    
+    # 新增API统计
+    api_call_count: int = 0
+    api_error_count: int = 0
+    
+    # 新增系统资源统计
+    peak_memory_usage: float = 0.0
+    peak_cpu_usage: float = 0.0
 
 
 class TradingController:
@@ -53,12 +69,13 @@ class TradingController:
     负责整合所有模块，提供统一的交易控制接口
     """
     
-    def __init__(self, config_manager: ConfigManager = None):
+    def __init__(self, config_manager: ConfigManager = None, enable_rich_logging: bool = True):
         """
         初始化交易控制器
         
         Args:
             config_manager: 配置管理器实例
+            enable_rich_logging: 是否启用Rich格式化日志
         """
         self.logger = logging.getLogger(__name__)
         
@@ -70,6 +87,9 @@ class TradingController:
         self.arbitrage_engine = ArbitrageEngine(self.data_collector)
         self.trade_executor = TradeExecutor(self.data_collector.rest_client)
         self.risk_manager = RiskManager(self.config_manager, self.data_collector.rest_client)
+        
+        # 交易日志记录器
+        self.trade_logger = TradeLogger(enable_file_logging=True) if enable_rich_logging else None
         
         # 交易状态
         self.status = TradingStatus.STOPPED
@@ -84,6 +104,11 @@ class TradingController:
         # 交易统计
         self.stats = TradingStats(start_time=time.time())
         self.stats_lock = threading.Lock()
+        
+        # 性能监控
+        self.performance_start_time = time.time()
+        self.loop_execution_times = []
+        self.system_monitor_enabled = True
         
         # 事件回调
         self.opportunity_callbacks: List[Callable] = []
@@ -219,6 +244,8 @@ class TradingController:
         stats_log_interval = 300  # 每5分钟输出一次统计
         
         while self.is_running:
+            loop_start_time = time.time()
+            
             try:
                 loop_count += 1
                 self.logger.debug(f"开始第 {loop_count} 轮交易循环")
@@ -227,7 +254,13 @@ class TradingController:
                 current_time = time.time()
                 if current_time - last_stats_log >= stats_log_interval:
                     self._log_periodic_stats()
+                    if self.trade_logger:
+                        self.trade_logger.print_daily_report()
                     last_stats_log = current_time
+                
+                # 更新系统资源使用情况
+                if self.system_monitor_enabled:
+                    self._update_system_metrics()
                 
                 # 1. 获取套利机会
                 opportunities = self.arbitrage_engine.find_opportunities()
@@ -239,6 +272,11 @@ class TradingController:
                     with self.stats_lock:
                         self.stats.total_opportunities += len(opportunities)
                         self.stats.last_opportunity_time = time.time()
+                    
+                    # 记录套利机会到日志
+                    if self.trade_logger:
+                        for opp in opportunities:
+                            self.trade_logger.log_opportunity_found(opp)
                     
                     # 2. 按path1→path2顺序处理
                     for opp in opportunities:
@@ -270,8 +308,58 @@ class TradingController:
                 self.logger.error(f"交易循环异常: {e}")
                 self._notify_error(f"交易循环异常: {e}")
                 await asyncio.sleep(5)  # 异常后等待5秒再继续
+            finally:
+                # 记录循环执行时间
+                loop_execution_time = time.time() - loop_start_time
+                self.loop_execution_times.append(loop_execution_time)
+                
+                # 只保留最近100次的执行时间
+                if len(self.loop_execution_times) > 100:
+                    self.loop_execution_times.pop(0)
+                
+                # 更新性能统计
+                with self.stats_lock:
+                    self.stats.total_execution_time += loop_execution_time
+                    self.stats.min_execution_time = min(self.stats.min_execution_time, loop_execution_time)
+                    self.stats.max_execution_time = max(self.stats.max_execution_time, loop_execution_time)
+                    if loop_count > 0:
+                        self.stats.avg_execution_time = self.stats.total_execution_time / loop_count
+                
+                # 更新TradeLogger的性能指标
+                if self.trade_logger:
+                    self.trade_logger.update_performance_metrics(
+                        execution_time=loop_execution_time,
+                        api_calls=1,  # 每次循环至少一次API调用
+                        api_errors=0  # 这里简化处理，实际应该从具体模块获取
+                    )
         
         self.logger.info("主交易循环结束")
+    
+    def _update_system_metrics(self):
+        """更新系统资源使用指标"""
+        try:
+            # 获取当前进程的资源使用情况
+            process = psutil.Process()
+            
+            # 内存使用情况 (MB)
+            memory_info = process.memory_info()
+            memory_mb = memory_info.rss / 1024 / 1024
+            
+            # CPU使用率
+            cpu_percent = process.cpu_percent()
+            
+            # 更新统计
+            with self.stats_lock:
+                self.stats.peak_memory_usage = max(self.stats.peak_memory_usage, memory_mb)
+                self.stats.peak_cpu_usage = max(self.stats.peak_cpu_usage, cpu_percent)
+            
+            # 更新TradeLogger的性能指标
+            if self.trade_logger:
+                self.trade_logger.performance_metrics.memory_usage = memory_mb
+                self.trade_logger.performance_metrics.cpu_usage = cpu_percent
+                
+        except Exception as e:
+            self.logger.debug(f"更新系统指标失败: {e}")
     
     async def _ensure_graceful_shutdown(self):
         """
@@ -518,6 +606,14 @@ class TradingController:
                 # 通知错误
                 self._notify_error(f"交易失败: {result['error']}")
             
+            # 记录交易结果到日志
+            if self.trade_logger:
+                self.trade_logger.log_trade_executed(opportunity, result)
+            
+            # 更新余额历史（如果有余额信息）
+            if self.trade_logger and 'balance' in result:
+                self.trade_logger.log_balance_update(result['balance'])
+            
             # 通知交易结果回调
             self._notify_trade_result(opportunity, result)
             
@@ -752,4 +848,98 @@ class TradingController:
     def reset_daily_counters(self):
         """重置每日计数器"""
         self.risk_manager.reset_daily_counters()
+        if self.trade_logger:
+            self.trade_logger.reset_daily_stats()
         self.logger.info("每日计数器已重置")
+    
+    def start_real_time_monitor(self):
+        """启动实时监控显示"""
+        if self.trade_logger:
+            self.trade_logger.start_real_time_monitor()
+        else:
+            self.logger.warning("实时监控需要启用Rich日志功能")
+    
+    def print_daily_report(self):
+        """打印每日报告"""
+        if self.trade_logger:
+            self.trade_logger.print_daily_report()
+        else:
+            self._log_final_stats()
+    
+    def export_daily_report(self, date: str = None) -> str:
+        """导出每日报告"""
+        if self.trade_logger:
+            return self.trade_logger.export_daily_report(date)
+        else:
+            self.logger.warning("导出报告需要启用Rich日志功能")
+            return ""
+    
+    def get_performance_metrics(self) -> Dict:
+        """获取性能指标"""
+        with self.stats_lock:
+            base_metrics = {
+                'avg_execution_time': self.stats.avg_execution_time,
+                'min_execution_time': self.stats.min_execution_time,
+                'max_execution_time': self.stats.max_execution_time,
+                'total_execution_time': self.stats.total_execution_time,
+                'peak_memory_usage_mb': self.stats.peak_memory_usage,
+                'peak_cpu_usage_percent': self.stats.peak_cpu_usage,
+                'api_call_count': self.stats.api_call_count,
+                'api_error_count': self.stats.api_error_count,
+                'loop_count': len(self.loop_execution_times),
+                'recent_loop_times': self.loop_execution_times[-10:] if self.loop_execution_times else []
+            }
+            
+            if self.trade_logger:
+                trade_logger_metrics = self.trade_logger.get_statistics_summary()
+                base_metrics.update(trade_logger_metrics)
+            
+            return base_metrics
+    
+    def get_enhanced_stats(self) -> Dict:
+        """获取增强的统计信息"""
+        base_stats = self.get_stats()
+        performance_metrics = self.get_performance_metrics()
+        
+        enhanced_stats = {
+            **base_stats,
+            'performance_metrics': performance_metrics,
+            'system_health': {
+                'data_collector_running': self.data_collector.is_running,
+                'arbitrage_engine_monitoring': self.arbitrage_engine.is_monitoring,
+                'risk_manager_enabled': self.risk_manager.trading_enabled,
+                'trading_enabled': self.is_running,
+                'current_status': self.status.value
+            }
+        }
+        
+        if self.trade_logger:
+            enhanced_stats['trade_logger_stats'] = self.trade_logger.get_statistics_summary()
+        
+        return enhanced_stats
+    
+    def print_balance_history(self):
+        """打印余额历史"""
+        if self.trade_logger:
+            self.trade_logger.print_balance_history()
+        else:
+            self.logger.warning("余额历史需要启用Rich日志功能")
+    
+    def update_balance_history(self, balance: Dict):
+        """更新余额历史"""
+        if self.trade_logger:
+            self.trade_logger.log_balance_update(balance)
+    
+    def get_current_opportunities(self) -> List[Dict]:
+        """获取当前套利机会"""
+        if self.trade_logger:
+            return self.trade_logger.current_opportunities
+        else:
+            return []
+    
+    def get_recent_trades(self) -> List[Dict]:
+        """获取最近交易记录"""
+        if self.trade_logger:
+            return [trade.__dict__ for trade in self.trade_logger.recent_trades]
+        else:
+            return []
