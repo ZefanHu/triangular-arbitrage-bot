@@ -74,12 +74,61 @@ class ConfigManager:
                     'fee_rate': float(self.get('trading', 'fee_rate', 0.001)),
                     'slippage_tolerance': float(self.get('trading', 'slippage_tolerance', 0.002)),
                     'min_profit_threshold': float(self.get('trading', 'min_profit_threshold', 0.003)),
-                    'order_timeout': float(self.get('trading', 'order_timeout', 3.0))
+                    'order_timeout': float(self.get('trading', 'order_timeout', 3.0)),
+                    'min_trade_amount': float(self.get('trading', 'min_trade_amount', 100.0)),
+                    'monitor_interval': float(self.get('trading', 'monitor_interval', 1.0)),
+                    'max_retries': int(self.get('trading', 'max_retries', 3)),
+                    'price_adjustment': float(self.get('trading', 'price_adjustment', 0.001))
                 }
             }
             return trading_config
         except Exception as e:
             self.logger.error(f"获取交易配置失败: {e}")
+            return {}
+    
+    def get_risk_config(self):
+        """
+        获取风险管理配置
+        
+        Returns:
+            dict: 风险管理配置字典
+        """
+        try:
+            risk_config = {
+                'max_position_ratio': float(self.get('risk', 'max_position_ratio', 0.2)),
+                'max_single_trade_ratio': float(self.get('risk', 'max_single_trade_ratio', 0.1)),
+                'min_arbitrage_interval': float(self.get('risk', 'min_arbitrage_interval', 10)),
+                'max_daily_trades': int(self.get('risk', 'max_daily_trades', 100)),
+                'max_daily_loss_ratio': float(self.get('risk', 'max_daily_loss_ratio', 0.05)),
+                'stop_loss_ratio': float(self.get('risk', 'stop_loss_ratio', 0.1)),
+                'balance_check_interval': float(self.get('risk', 'balance_check_interval', 60)),
+                'network_retry_count': int(self.get('risk', 'network_retry_count', 3)),
+                'network_retry_delay': float(self.get('risk', 'network_retry_delay', 1.0))
+            }
+            return risk_config
+        except Exception as e:
+            self.logger.error(f"获取风险管理配置失败: {e}")
+            return {}
+    
+    def get_system_config(self):
+        """
+        获取系统配置
+        
+        Returns:
+            dict: 系统配置字典
+        """
+        try:
+            system_config = {
+                'log_level': self.get('system', 'log_level', 'INFO'),
+                'log_file': self.get('system', 'log_file', 'logs/trading.log'),
+                'enable_performance_monitoring': self.get('system', 'enable_performance_monitoring', 'true').lower() == 'true',
+                'performance_log_interval': int(self.get('system', 'performance_log_interval', 300)),
+                'enable_trade_history': self.get('system', 'enable_trade_history', 'true').lower() == 'true',
+                'trade_history_file': self.get('system', 'trade_history_file', 'logs/trade_history.json')
+            }
+            return system_config
+        except Exception as e:
+            self.logger.error(f"获取系统配置失败: {e}")
             return {}
     
     def get_api_credentials(self):
@@ -131,6 +180,39 @@ class ConfigManager:
                 order_timeout = float(self.get('trading', 'order_timeout', 3.0))
                 if order_timeout <= 0:
                     errors.append("order_timeout必须大于0")
+                
+                min_trade_amount = float(self.get('trading', 'min_trade_amount', 100.0))
+                if min_trade_amount <= 0:
+                    errors.append("min_trade_amount必须大于0")
+            
+            # 验证风险管理参数
+            if self.config.has_section('risk'):
+                max_position_ratio = float(self.get('risk', 'max_position_ratio', 0.2))
+                if not (0 < max_position_ratio <= 1):
+                    errors.append("max_position_ratio必须在0-1之间")
+                
+                max_single_trade_ratio = float(self.get('risk', 'max_single_trade_ratio', 0.1))
+                if not (0 < max_single_trade_ratio <= 1):
+                    errors.append("max_single_trade_ratio必须在0-1之间")
+                
+                if max_single_trade_ratio > max_position_ratio:
+                    errors.append("max_single_trade_ratio不能大于max_position_ratio")
+                
+                min_arbitrage_interval = float(self.get('risk', 'min_arbitrage_interval', 10))
+                if min_arbitrage_interval < 0:
+                    errors.append("min_arbitrage_interval必须大于等于0")
+                
+                max_daily_trades = int(self.get('risk', 'max_daily_trades', 100))
+                if max_daily_trades <= 0:
+                    errors.append("max_daily_trades必须大于0")
+                
+                max_daily_loss_ratio = float(self.get('risk', 'max_daily_loss_ratio', 0.05))
+                if not (0 < max_daily_loss_ratio <= 1):
+                    errors.append("max_daily_loss_ratio必须在0-1之间")
+                
+                stop_loss_ratio = float(self.get('risk', 'stop_loss_ratio', 0.1))
+                if not (0 < stop_loss_ratio <= 1):
+                    errors.append("stop_loss_ratio必须在0-1之间")
             
             if errors:
                 self.logger.error(f"配置验证失败: {', '.join(errors)}")
