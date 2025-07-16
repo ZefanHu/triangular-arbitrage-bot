@@ -17,8 +17,23 @@ from typing import Dict, List, Optional
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+
+from core.okx_client import OKXClient
+from core.data_collector import DataCollector
+from core.arbitrage_engine import ArbitrageEngine
+from core.trade_executor import TradeExecutor
+from core.risk_manager import RiskManager
+from core.trading_controller import TradingController
+from config.config_manager import ConfigManager
+from models.arbitrage_path import ArbitrageOpportunity, ArbitragePath
+from models.order_book import OrderBook
+from models.portfolio import Portfolio
+
+
+# pytest插件配置
 def pytest_configure(config):
-    """配置pytest标记"""
+    """pytest配置钩子"""
+    # 配置pytest标记
     config.addinivalue_line(
         "markers", "integration: marks tests as integration tests"
     )
@@ -37,22 +52,7 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "trading: marks tests that involve trading operations"
     )
-
-from core.okx_client import OKXClient
-from core.data_collector import DataCollector
-from core.arbitrage_engine import ArbitrageEngine
-from core.trade_executor import TradeExecutor
-from core.risk_manager import RiskManager
-from core.trading_controller import TradingController
-from config.config_manager import ConfigManager
-from models.arbitrage_path import ArbitrageOpportunity, ArbitragePath
-from models.order_book import OrderBook
-from models.portfolio import Portfolio
-
-
-# pytest插件配置
-def pytest_configure(config):
-    """pytest配置钩子"""
+    
     # 创建报告目录
     os.makedirs("tests/reports", exist_ok=True)
     os.makedirs("tests/logs", exist_ok=True)

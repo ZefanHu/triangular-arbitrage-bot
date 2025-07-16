@@ -429,8 +429,18 @@ class TestTradeExecutor:
         else:
             pytest.skip("无法生成交易计划")
     
-    def test_error_handling_insufficient_balance(self, trade_executor, sample_opportunity):
+    def test_error_handling_insufficient_balance(self, mock_okx_client, sample_opportunity):
         """测试余额不足错误处理"""
+        # 设置较小的余额来模拟余额不足
+        mock_okx_client.get_balance.return_value = {
+            "USDT": 10.0,  # 只有10 USDT，不足以进行大额交易
+            "BTC": 0.0,
+            "ETH": 0.0
+        }
+        
+        # 创建trade_executor实例
+        trade_executor = TradeExecutor(mock_okx_client)
+        
         # 使用一个很大的金额来测试余额不足情况
         result = trade_executor.execute_arbitrage(sample_opportunity, 100000.0)
         

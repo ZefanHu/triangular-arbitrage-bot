@@ -39,8 +39,11 @@ def parse_params_to_str(params):
 
 
 def get_timestamp():
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.timezone.utc)
     t = now.isoformat("T", "milliseconds")
+    # 移除+00:00时区信息，因为我们已经知道这是UTC时间
+    if t.endswith('+00:00'):
+        t = t[:-6]
     return t + "Z"
 
 
