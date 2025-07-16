@@ -94,5 +94,889 @@
       }
     },
     "error_message": null
+  },
+  {
+    "timestamp": 1752639221.5765593,
+    "trade_id": "opp_1752639221576",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.01588614029024356,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.13551296999999998,
+      "estimated_profit": 1.588614029024356,
+      "timestamp": 1752639221.3852036
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752639222.7828157,
+    "trade_id": "opp_1752639222782",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.01588614029024356,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.09089208,
+      "estimated_profit": 1.588614029024356,
+      "timestamp": 1752639222.581374
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752639223.9820254,
+    "trade_id": "opp_1752639223982",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.01588614029024356,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.09133208,
+      "estimated_profit": 1.588614029024356,
+      "timestamp": 1752639223.787525
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752639225.179274,
+    "trade_id": "opp_1752639225179",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.015885274367997793,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.04022208,
+      "estimated_profit": 1.5885274367997795,
+      "timestamp": 1752639224.9864151
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752639226.3814604,
+    "trade_id": "opp_1752639226381",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.015885274367997793,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.03960208,
+      "estimated_profit": 1.5885274367997795,
+      "timestamp": 1752639226.183968
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752639227.5846188,
+    "trade_id": "opp_1752639227584",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.015885274367997793,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.03960208,
+      "estimated_profit": 1.5885274367997795,
+      "timestamp": 1752639227.3865135
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752639228.7750783,
+    "trade_id": "opp_1752639228775",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.015885274367997793,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.03960208,
+      "estimated_profit": 1.5885274367997795,
+      "timestamp": 1752639228.5890827
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752639229.9778335,
+    "trade_id": "opp_1752639229977",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.015885274367997793,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.05570208,
+      "estimated_profit": 1.5885274367997795,
+      "timestamp": 1752639229.7790866
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752639231.1793997,
+    "trade_id": "opp_1752639231179",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.015885274367997793,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.05570208,
+      "estimated_profit": 1.5885274367997795,
+      "timestamp": 1752639230.982589
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752639382.8319108,
+    "trade_id": "opp_1752639382831",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.02650622832188361,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.13352296,
+      "estimated_profit": 2.650622832188361,
+      "timestamp": 1752639382.6460912
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752639384.0301995,
+    "trade_id": "opp_1752639384030",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.026514103985538072,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.21182938,
+      "estimated_profit": 2.651410398553807,
+      "timestamp": 1752639383.8450763
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752639385.2328215,
+    "trade_id": "opp_1752639385232",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.026514103985538072,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.11631981,
+      "estimated_profit": 2.651410398553807,
+      "timestamp": 1752639385.0343542
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752639386.4283876,
+    "trade_id": "opp_1752639386428",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.026514103985538072,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.2281747,
+      "estimated_profit": 2.651410398553807,
+      "timestamp": 1752639386.237613
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752639387.6269054,
+    "trade_id": "opp_1752639387626",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.02651060334406182,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.22918634,
+      "estimated_profit": 2.651060334406182,
+      "timestamp": 1752639387.4336908
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752639388.8266902,
+    "trade_id": "opp_1752639388826",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.02644759588001975,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.059041920000000005,
+      "estimated_profit": 2.6447595880019747,
+      "timestamp": 1752639388.6317434
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752639390.040157,
+    "trade_id": "opp_1752639390040",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.026510604287878294,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.25040674,
+      "estimated_profit": 2.6510604287878294,
+      "timestamp": 1752639389.8319788
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752639391.235208,
+    "trade_id": "opp_1752639391235",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.026510604287878294,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.26744268,
+      "estimated_profit": 2.6510604287878294,
+      "timestamp": 1752639391.0454073
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752639392.4306996,
+    "trade_id": "opp_1752639392430",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.026510604287878294,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.28939174,
+      "estimated_profit": 2.6510604287878294,
+      "timestamp": 1752639392.239471
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752640880.9281034,
+    "trade_id": "opp_1752640880928",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.02645287435274568,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.3114744,
+      "estimated_profit": 2.645287435274568,
+      "timestamp": 1752640880.692795
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752640882.1275325,
+    "trade_id": "opp_1752640882127",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.02645287435274568,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.44737368,
+      "estimated_profit": 2.645287435274568,
+      "timestamp": 1752640881.9342728
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752640883.3271496,
+    "trade_id": "opp_1752640883327",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.02645287435274568,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.46377054,
+      "estimated_profit": 2.645287435274568,
+      "timestamp": 1752640883.133976
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752641504.7476392,
+    "trade_id": "opp_1752641504747",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.02646159886500527,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.049616810000000004,
+      "estimated_profit": 2.646159886500527,
+      "timestamp": 1752641504.747586
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752641505.7527325,
+    "trade_id": "opp_1752641505752",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.02646159886500527,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.05810221,
+      "estimated_profit": 2.646159886500527,
+      "timestamp": 1752641505.7526722
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752641506.759743,
+    "trade_id": "opp_1752641506759",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.02646159886500527,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.10064348000000001,
+      "estimated_profit": 2.646159886500527,
+      "timestamp": 1752641506.7596905
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752641507.7651021,
+    "trade_id": "opp_1752641507765",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.02646159886500527,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.10064348000000001,
+      "estimated_profit": 2.646159886500527,
+      "timestamp": 1752641507.765057
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752641508.771322,
+    "trade_id": "opp_1752641508771",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.02646159886500527,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.12265465,
+      "estimated_profit": 2.646159886500527,
+      "timestamp": 1752641508.771279
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752641509.7758636,
+    "trade_id": "opp_1752641509775",
+    "path": "path1",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path1",
+      "path": [
+        "USDT",
+        "BTC",
+        "USDC",
+        "USDT"
+      ],
+      "profit_rate": 0.02642754875238481,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.13039462000000002,
+      "estimated_profit": 2.642754875238481,
+      "timestamp": 1752641509.7757509
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752642930.1446738,
+    "trade_id": "opp_1752642930144",
+    "path": "path2",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path2",
+      "path": [
+        "USDT",
+        "USDC",
+        "BTC",
+        "USDT"
+      ],
+      "profit_rate": 0.026461602031876766,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.0891747,
+      "estimated_profit": 2.6461602031876765,
+      "timestamp": 1752642930.1446526
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752642931.1493464,
+    "trade_id": "opp_1752642931149",
+    "path": "path2",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path2",
+      "path": [
+        "USDT",
+        "USDC",
+        "BTC",
+        "USDT"
+      ],
+      "profit_rate": 0.026461602031876766,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.06979315,
+      "estimated_profit": 2.6461602031876765,
+      "timestamp": 1752642931.1493163
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752642932.1553853,
+    "trade_id": "opp_1752642932155",
+    "path": "path2",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path2",
+      "path": [
+        "USDT",
+        "USDC",
+        "BTC",
+        "USDT"
+      ],
+      "profit_rate": 0.026461602031876766,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.0891747,
+      "estimated_profit": 2.6461602031876765,
+      "timestamp": 1752642932.155363
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752642933.1621819,
+    "trade_id": "opp_1752642933162",
+    "path": "path2",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path2",
+      "path": [
+        "USDT",
+        "USDC",
+        "BTC",
+        "USDT"
+      ],
+      "profit_rate": 0.026461602031876766,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.08747797,
+      "estimated_profit": 2.6461602031876765,
+      "timestamp": 1752642933.162163
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752642934.1682615,
+    "trade_id": "opp_1752642934168",
+    "path": "path2",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path2",
+      "path": [
+        "USDT",
+        "USDC",
+        "BTC",
+        "USDT"
+      ],
+      "profit_rate": 0.026461602031876766,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.11143,
+      "estimated_profit": 2.6461602031876765,
+      "timestamp": 1752642934.1682448
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752642935.1735651,
+    "trade_id": "opp_1752642935173",
+    "path": "path2",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path2",
+      "path": [
+        "USDT",
+        "USDC",
+        "BTC",
+        "USDT"
+      ],
+      "profit_rate": 0.026461602031876766,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.07454854,
+      "estimated_profit": 2.6461602031876765,
+      "timestamp": 1752642935.1735482
+    },
+    "error_message": null
+  },
+  {
+    "timestamp": 1752642936.1799967,
+    "trade_id": "opp_1752642936179",
+    "path": "path2",
+    "action": "opportunity_found",
+    "investment_amount": 0.0,
+    "final_amount": 0.0,
+    "profit": 0.0,
+    "profit_rate": 0.0,
+    "success": false,
+    "details": {
+      "path_name": "path2",
+      "path": [
+        "USDT",
+        "USDC",
+        "BTC",
+        "USDT"
+      ],
+      "profit_rate": 0.026461602031876766,
+      "min_trade_amount": 100.0,
+      "max_trade_amount": 0.07454854,
+      "estimated_profit": 2.6461602031876765,
+      "timestamp": 1752642936.1799753
+    },
+    "error_message": null
   }
 ]

@@ -18,6 +18,7 @@ from core.trade_executor import TradeExecutor
 from core.risk_manager import RiskManager
 from core.okx_client import OKXClient
 from config.config_manager import ConfigManager
+from models.order_book import OrderBook
 
 
 class TestIntegration:
@@ -229,14 +230,13 @@ class TestIntegration:
         for pair in test_pairs:
             orderbook = trade_executor.okx_client.get_orderbook(pair)
             
-            if orderbook and 'data' in orderbook:
-                data = orderbook['data'][0]
-                assert 'bids' in data
-                assert 'asks' in data
-                assert len(data['bids']) > 0
-                assert len(data['asks']) > 0
+            if orderbook and isinstance(orderbook, OrderBook):
+                # orderbook 现在是 OrderBook 对象
+                assert orderbook.symbol == pair
+                assert len(orderbook.bids) > 0
+                assert len(orderbook.asks) > 0
                 
-                logging.info(f"{pair} 订单簿: {len(data['bids'])}档买单, {len(data['asks'])}档卖单")
+                logging.info(f"{pair} 订单簿: {len(orderbook.bids)}档买单, {len(orderbook.asks)}档卖单")
     
     @pytest.mark.integration
     async def test_full_arbitrage_flow_simulation(self, data_collector, arbitrage_engine, risk_manager, test_trading_pairs):

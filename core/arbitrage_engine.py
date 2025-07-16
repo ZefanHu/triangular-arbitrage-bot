@@ -65,9 +65,19 @@ class ArbitrageEngine:
         self.logger.info(f"监控间隔: {self.monitor_interval}秒")
     
     def _get_trading_pair(self, asset1: str, asset2: str) -> Tuple[str, str]:
-        """获取标准化的交易对和交易方向"""
-        # 标准交易对规则：BTC-USDT, ETH-USDT, ETH-BTC 等
-        # 基础货币通常是价值较高的币种
+        """
+        获取标准化的交易对和交易方向
+        
+        注意：这个方法仅用于向后兼容，建议使用配置文件中的显式交易对配置。
+        """
+        # 特殊处理USDT和USDC的顺序，确保总是生成USDT-USDC
+        if {asset1, asset2} == {'USDT', 'USDC'}:
+            if asset1 == 'USDT' and asset2 == 'USDC':
+                return 'USDT-USDC', 'sell'  # 卖出USDT换USDC
+            else:  # asset1 == 'USDC' and asset2 == 'USDT'
+                return 'USDT-USDC', 'buy'   # 买入USDT用USDC
+        
+        # 简化的交易对生成：优先使用常见的交易对格式
         priority = {'BTC': 3, 'ETH': 2, 'USDT': 1, 'USDC': 1}
         
         p1 = priority.get(asset1, 0)
@@ -154,6 +164,8 @@ class ArbitrageEngine:
         """
         查找所有配置路径的套利机会
         
+        现在完全使用配置文件中的显式交易对，不再进行推断
+        
         Returns:
             套利机会列表，每个元素包含路径、利润率、交易量等信息
         """
@@ -163,16 +175,26 @@ class ArbitrageEngine:
         self.stats['check_count'] += 1
         self.stats['last_check_time'] = time.time()
         
-        # 按顺序检查路径 (path1, path2)
-        for path_name in ['path1', 'path2']:
-            path = self.paths.get(path_name, [])
-            if not path:
+        # 检查所有配置的路径
+        for path_name, path_config in self.paths.items():
+            if not path_config:
                 continue
                 
-            self.logger.debug(f"分析路径 {path_name}: {' -> '.join(path)}")
-            
-            # 计算该路径的套利机会
-            opportunity = self.calculate_arbitrage(path)
+            # 优先使用新的JSON格式配置
+            if isinstance(path_config, dict) and 'steps' in path_config:
+                # 新的JSON格式，直接使用配置的交易对
+                self.logger.debug(f"使用显式配置分析路径 {path_name}")
+                opportunity = self.calculate_arbitrage_from_steps(path_name, path_config)
+            else:
+                # 对于旧格式，建议用户升级到新格式
+                self.logger.warning(f"路径 {path_name} 使用旧格式配置，建议升级到JSON格式以获得更好的性能和准确性")
+                # 暂时保留向后兼容，但会在日志中提醒
+                path_assets = self._parse_path_config(path_name, path_config)
+                if not path_assets:
+                    continue
+                    
+                self.logger.debug(f"分析路径 {path_name}: {' -> '.join(path_assets)} (使用推断模式)")
+                opportunity = self.calculate_arbitrage(path_assets)
             
             if opportunity:
                 opportunity_dict = {
@@ -193,6 +215,283 @@ class ArbitrageEngine:
                 self.logger.info(f"发现套利机会: {path_name}, 利润率: {opportunity.profit_rate:.4%}")
         
         return opportunities
+    
+    def calculate_arbitrage_from_steps(self, path_name: str, path_config: dict) -> Optional[ArbitrageOpportunity]:
+        """
+        直接使用配置文件中的交易步骤计算套利机会
+        
+        Args:
+            path_name: 路径名称
+            path_config: 包含steps的路径配置
+            
+        Returns:
+            套利机会信息，如果无套利机会则返回None
+        """
+        try:
+            steps = path_config.get('steps', [])
+            if not steps:
+                self.logger.warning(f"路径 {path_name} 没有交易步骤")
+                return None
+            
+            route = path_config.get('route', '')
+            if route:
+                # 从路径描述中提取资产列表
+                path_assets = [asset.strip() for asset in route.split('->')]
+            else:
+                # 从steps中推断路径
+                path_assets = self._extract_path_from_steps(steps)
+            
+            if len(path_assets) < 3 or path_assets[0] != path_assets[-1]:
+                self.logger.warning(f"无效路径: {path_assets}")
+                return None
+            
+            trade_steps = []
+            
+            # 直接使用配置中的交易对，不重新推断
+            for step in steps:
+                pair = step.get('pair')
+                action = step.get('action')
+                
+                if not pair or not action:
+                    self.logger.warning(f"步骤缺少必要信息: {step}")
+                    return None
+                
+                # 从数据采集器获取订单簿
+                order_book = self.data_collector.get_orderbook(pair)
+                if not order_book:
+                    self.logger.warning(f"无法获取交易对 {pair} 的订单簿")
+                    return None
+                
+                trade_steps.append({
+                    'pair': pair,
+                    'action': action,
+                    'order_book': order_book
+                })
+            
+            # 计算利润率
+            final_amount, profit_rate = self.calculate_path_profit_from_steps(trade_steps, self.min_trade_amount)
+            
+            # 判断是否有套利机会
+            if profit_rate <= self.min_profit_threshold:
+                return None
+            
+            # 计算最大可交易量（基于订单簿深度）
+            max_trade_amount = self._calculate_max_trade_amount_from_steps(trade_steps)
+            
+            return ArbitrageOpportunity(
+                path=path_assets,
+                profit_rate=profit_rate,
+                min_trade_amount=self.min_trade_amount,
+                max_trade_amount=max_trade_amount,
+                trade_steps=trade_steps,
+                estimated_profit=(final_amount - self.min_trade_amount),
+                timestamp=time.time()
+            )
+            
+        except Exception as e:
+            self.logger.error(f"计算路径 {path_name} 套利机会失败: {e}")
+            return None
+    
+    def _extract_path_from_steps(self, steps: list) -> list:
+        """从交易步骤中提取资产路径"""
+        if not steps:
+            return []
+        
+        # 从第一个交易对开始推断起始资产
+        first_pair = steps[0]['pair']
+        first_action = steps[0]['action']
+        base, quote = first_pair.split('-')
+        
+        # 根据action确定起始资产
+        if first_action == 'buy':
+            # 买入base用quote，所以起始资产是quote
+            assets = [quote]
+            current_asset = base
+        else:
+            # 卖出base换quote，所以起始资产是base
+            assets = [base]
+            current_asset = quote
+        
+        assets.append(current_asset)
+        
+        # 处理后续步骤
+        for step in steps[1:]:
+            pair = step['pair']
+            action = step['action']
+            step_base, step_quote = pair.split('-')
+            
+            if action == 'buy':
+                if current_asset == step_quote:
+                    current_asset = step_base
+                elif current_asset == step_base:
+                    current_asset = step_quote
+            else:  # sell
+                if current_asset == step_base:
+                    current_asset = step_quote
+                elif current_asset == step_quote:
+                    current_asset = step_base
+            
+            assets.append(current_asset)
+        
+        return assets
+    
+    def calculate_path_profit_from_steps(self, trade_steps: list, amount: float) -> tuple:
+        """
+        使用交易步骤计算路径利润
+        
+        Args:
+            trade_steps: 交易步骤列表
+            amount: 初始金额
+            
+        Returns:
+            (最终金额, 利润率) 元组
+        """
+        current_amount = amount
+        
+        for step in trade_steps:
+            pair = step['pair']
+            action = step['action']
+            order_book = step['order_book']
+            
+            # 根据action选择价格
+            if action == 'buy':
+                # 买入时使用卖一价（asks）
+                if hasattr(order_book, 'asks') and order_book.asks:
+                    price = order_book.asks[0][0]
+                elif isinstance(order_book, dict) and order_book.get('asks'):
+                    price = order_book['asks'][0][0]
+                else:
+                    price = 0
+                if price == 0:
+                    return 0, -1
+                # 计算获得的数量（扣除手续费）
+                current_amount = (current_amount / price) * (1 - self.fee_rate)
+            else:  # sell
+                # 卖出时使用买一价（bids）
+                if hasattr(order_book, 'bids') and order_book.bids:
+                    price = order_book.bids[0][0]
+                elif isinstance(order_book, dict) and order_book.get('bids'):
+                    price = order_book['bids'][0][0]
+                else:
+                    price = 0
+                if price == 0:
+                    return 0, -1
+                # 计算获得的数量（扣除手续费）
+                current_amount = (current_amount * price) * (1 - self.fee_rate)
+            
+            self.logger.debug(f"{pair} {action} @ {price}, amount: {current_amount}")
+        
+        profit_rate = (current_amount - amount) / amount
+        return current_amount, profit_rate
+    
+    def _calculate_max_trade_amount_from_steps(self, trade_steps: list) -> float:
+        """基于交易步骤计算最大可交易量"""
+        max_amount = float('inf')
+        
+        # 从后往前计算，确保每一步都有足够的深度
+        for step in reversed(trade_steps):
+            order_book = step['order_book']
+            action = step['action']
+            
+            if action == 'buy':
+                # 买入时，检查卖单深度
+                if hasattr(order_book, 'asks') and order_book.asks:
+                    available = sum(ask[1] for ask in order_book.asks[:5])  # 前5档
+                    max_amount = min(max_amount, available)
+                elif isinstance(order_book, dict) and order_book.get('asks'):
+                    available = sum(ask[1] for ask in order_book['asks'][:5])  # 前5档
+                    max_amount = min(max_amount, available)
+            else:  # sell
+                # 卖出时，检查买单深度
+                if hasattr(order_book, 'bids') and order_book.bids:
+                    available = sum(bid[1] for bid in order_book.bids[:5])  # 前5档
+                    max_amount = min(max_amount, available)
+                elif isinstance(order_book, dict) and order_book.get('bids'):
+                    available = sum(bid[1] for bid in order_book['bids'][:5])  # 前5档
+                    max_amount = min(max_amount, available)
+        
+        return min(max_amount, 10000.0)  # 限制最大交易量
+    
+    def _parse_path_config(self, path_name: str, path_config) -> List[str]:
+        """
+        解析路径配置，支持JSON格式和旧格式
+        
+        Args:
+            path_name: 路径名称
+            path_config: 路径配置
+            
+        Returns:
+            资产列表，如 ['USDT', 'BTC', 'USDC', 'USDT']
+        """
+        try:
+            # 处理新的JSON格式
+            if isinstance(path_config, dict) and 'route' in path_config:
+                route = path_config['route']
+                # 从路径描述中提取资产列表
+                # 例如："USDT->BTC->USDC->USDT" -> ['USDT', 'BTC', 'USDC', 'USDT']
+                assets = [asset.strip() for asset in route.split('->')]
+                return assets
+                
+            # 处理新的JSON格式（包含steps）
+            elif isinstance(path_config, dict) and 'steps' in path_config:
+                # 从steps中推断资产路径
+                steps = path_config['steps']
+                if not steps:
+                    return []
+                
+                # 从第一个交易对开始推断起始资产
+                first_pair = steps[0]['pair']
+                first_action = steps[0]['action']
+                base, quote = first_pair.split('-')
+                
+                # 根据action确定起始资产
+                if first_action == 'buy':
+                    # 买入base用quote，所以起始资产是quote
+                    assets = [quote]
+                    current_asset = base
+                else:
+                    # 卖出base换quote，所以起始资产是base
+                    assets = [base]
+                    current_asset = quote
+                
+                assets.append(current_asset)
+                
+                # 处理后续步骤
+                for step in steps[1:]:
+                    pair = step['pair']
+                    action = step['action']
+                    step_base, step_quote = pair.split('-')
+                    
+                    if action == 'buy':
+                        if current_asset == step_quote:
+                            current_asset = step_base
+                        elif current_asset == step_base:
+                            current_asset = step_quote
+                    else:  # sell
+                        if current_asset == step_base:
+                            current_asset = step_quote
+                        elif current_asset == step_quote:
+                            current_asset = step_base
+                    
+                    assets.append(current_asset)
+                
+                return assets
+                
+            # 向后兼容：处理旧格式转换后的结果
+            elif isinstance(path_config, dict) and 'assets' in path_config:
+                return path_config['assets']
+                
+            # 向后兼容：处理完全旧格式（列表）
+            elif isinstance(path_config, list):
+                return path_config
+                
+            else:
+                self.logger.warning(f"未知的路径配置格式: {path_name} = {path_config}")
+                return []
+                
+        except Exception as e:
+            self.logger.error(f"解析路径配置失败 {path_name}: {e}")
+            return []
     
     def calculate_path_profit(self, path: List[str], amount: float) -> Tuple[float, float]:
         """

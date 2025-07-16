@@ -2,6 +2,7 @@ import configparser
 import os
 import logging
 import time
+import json
 
 
 class ConfigManager:
@@ -57,13 +58,55 @@ class ConfigManager:
             self.logger.error(f"加载配置文件失败: {e}")
             raise
     
+    def _parse_path_config(self, path_value):
+        """
+        解析路径配置，支持JSON格式和旧格式
+        
+        Args:
+            path_value: 配置文件中的路径值
+            
+        Returns:
+            dict: 解析后的路径配置
+        """
+        if not path_value:
+            return None
+        
+        path_value = path_value.strip()
+        
+        # 尝试解析JSON格式
+        if path_value.startswith('{'):
+            try:
+                return json.loads(path_value)
+            except json.JSONDecodeError as e:
+                self.logger.error(f"解析JSON路径配置失败: {e}")
+                return None
+        
+        # 向后兼容：解析旧格式 (逗号分隔的资产列表)
+        else:
+            assets = [asset.strip() for asset in path_value.split(',') if asset.strip()]
+            if len(assets) < 2:
+                return None
+            return {
+                "route": "->".join(assets),
+                "assets": assets,  # 为了向后兼容保留
+                "legacy_format": True
+            }
+    
     def get_trading_config(self):
         try:
+            # 解析路径配置
+            paths = {}
+            
+            # 查找所有path开头的配置项
+            if self.config.has_section('trading'):
+                for key in self.config['trading']:
+                    if key.startswith('path'):
+                        path_config = self._parse_path_config(self.get('trading', key, ''))
+                        if path_config:
+                            paths[key] = path_config
+            
             trading_config = {
-                'paths': {
-                    'path1': self.get('trading', 'path1', '').split(',') if self.get('trading', 'path1') else [],
-                    'path2': self.get('trading', 'path2', '').split(',') if self.get('trading', 'path2') else []
-                },
+                'paths': paths,
                 'initial_holdings': {
                     'usdt': float(self.get('trading', 'initial_usdt', 0)),
                     'usdc': float(self.get('trading', 'initial_usdc', 0)),

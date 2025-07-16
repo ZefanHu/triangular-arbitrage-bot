@@ -452,12 +452,15 @@ class TradingController:
                 total_balance_usdt = sum(balance.values())  # 简化计算
                 
                 # 创建ArbitrageOpportunity对象
-                from models.arbitrage_path import ArbitrageOpportunity
+                from models.arbitrage_path import ArbitrageOpportunity, ArbitragePath
+                
+                # 将path列表转换为ArbitragePath对象
+                arbitrage_path = ArbitragePath(path=opportunity['path'])
+                
                 arb_opportunity = ArbitrageOpportunity(
-                    path=opportunity['path'],
+                    path=arbitrage_path,
                     profit_rate=opportunity['profit_rate'],
                     min_amount=opportunity['min_trade_amount'],
-                    max_amount=opportunity['max_trade_amount'],
                     timestamp=opportunity['timestamp']
                 )
                 
@@ -646,35 +649,82 @@ class TradingController:
         """
         获取交易对配置
         
+        从新的JSON格式路径配置中提取所有需要的交易对
+        
         Returns:
             交易对列表
         """
         trading_config = self.config_manager.get_trading_config()
-        pairs = []
+        pairs = set()  # 使用set避免重复
         
         # 从路径配置中提取交易对
-        for path_name, path in trading_config.get('paths', {}).items():
-            if isinstance(path, list) and len(path) > 1:
-                # 从路径生成交易对
-                for i in range(len(path) - 1):
-                    asset1, asset2 = path[i], path[i + 1]
-                    # 标准化交易对名称
-                    pair1 = f"{asset1}-{asset2}"
-                    pair2 = f"{asset2}-{asset1}"
-                    if pair1 not in pairs:
-                        pairs.append(pair1)
-                    if pair2 not in pairs:
-                        pairs.append(pair2)
+        for path_name, path_config in trading_config.get('paths', {}).items():
+            if not path_config:
+                continue
+                
+            # 处理新的JSON格式
+            if isinstance(path_config, dict) and 'steps' in path_config:
+                for step in path_config['steps']:
+                    if 'pair' in step:
+                        pair = step['pair'].upper()  # 确保大写
+                        pairs.add(pair)
+                        
+            # 向后兼容旧格式
+            elif isinstance(path_config, dict) and 'assets' in path_config:
+                # 这是旧格式转换后的结果，我们需要推断交易对
+                assets = path_config['assets']
+                for i in range(len(assets) - 1):
+                    asset1, asset2 = assets[i].upper(), assets[i + 1].upper()
+                    # 简单的交易对生成逻辑（可能需要根据实际情况调整）
+                    if self._is_major_crypto(asset1) and self._is_stable_coin(asset2):
+                        pairs.add(f"{asset1}-{asset2}")
+                    elif self._is_major_crypto(asset2) and self._is_stable_coin(asset1):
+                        pairs.add(f"{asset2}-{asset1}")
+                    elif self._is_stable_coin(asset1) and self._is_stable_coin(asset2):
+                        # 稳定币之间按字母顺序
+                        if asset1 < asset2:
+                            pairs.add(f"{asset1}-{asset2}")
+                        else:
+                            pairs.add(f"{asset2}-{asset1}")
+                    else:
+                        # 默认情况
+                        pairs.add(f"{asset1}-{asset2}")
+                        
+            # 处理旧的列表格式（完全向后兼容）
+            elif isinstance(path_config, list) and len(path_config) > 1:
+                for i in range(len(path_config) - 1):
+                    asset1, asset2 = path_config[i].upper(), path_config[i + 1].upper()
+                    # 使用相同的逻辑
+                    if self._is_major_crypto(asset1) and self._is_stable_coin(asset2):
+                        pairs.add(f"{asset1}-{asset2}")
+                    elif self._is_major_crypto(asset2) and self._is_stable_coin(asset1):
+                        pairs.add(f"{asset2}-{asset1}")
+                    elif self._is_stable_coin(asset1) and self._is_stable_coin(asset2):
+                        if asset1 < asset2:
+                            pairs.add(f"{asset1}-{asset2}")
+                        else:
+                            pairs.add(f"{asset2}-{asset1}")
+                    else:
+                        pairs.add(f"{asset1}-{asset2}")
         
         # 添加默认交易对
         default_pairs = [
             'BTC-USDT', 'ETH-USDT', 'BTC-USDC', 'ETH-USDC', 'USDT-USDC'
         ]
         for pair in default_pairs:
-            if pair not in pairs:
-                pairs.append(pair)
+            pairs.add(pair)
         
-        return pairs
+        return list(pairs)
+    
+    def _is_major_crypto(self, asset: str) -> bool:
+        """判断是否为主流加密货币"""
+        major_cryptos = {'BTC', 'ETH', 'BNB', 'ADA', 'XRP', 'SOL', 'DOT', 'AVAX', 'MATIC'}
+        return asset.upper() in major_cryptos
+    
+    def _is_stable_coin(self, asset: str) -> bool:
+        """判断是否为稳定币"""
+        stablecoins = {'USDT', 'USDC', 'BUSD', 'DAI', 'TUSD', 'USDP'}
+        return asset.upper() in stablecoins
     
     def _notify_opportunity(self, opportunity: Dict):
         """通知套利机会回调"""

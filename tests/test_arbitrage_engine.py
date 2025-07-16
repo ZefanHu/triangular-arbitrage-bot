@@ -81,6 +81,16 @@ class TestArbitrageEngine:
         pair, direction = arbitrage_engine._get_trading_pair("USDT", "ETH")
         assert pair == "ETH-USDT"
         assert direction == "buy"
+        
+        # 测试USDT-USDC交易对（特殊处理）
+        pair, direction = arbitrage_engine._get_trading_pair("USDT", "USDC")
+        assert pair == "USDT-USDC"
+        assert direction == "sell"  # 卖出USDT换USDC
+        
+        # 测试USDC-USDT交易对（特殊处理）
+        pair, direction = arbitrage_engine._get_trading_pair("USDC", "USDT")
+        assert pair == "USDT-USDC"
+        assert direction == "buy"   # 买入USDT用USDC
     
     def test_path_profit_calculation_simple(self, arbitrage_engine):
         """测试简单路径利润计算"""
