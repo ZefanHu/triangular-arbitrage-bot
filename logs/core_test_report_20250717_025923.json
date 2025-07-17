@@ -1,0 +1,184 @@
+{
+  "test_summary": {
+    "total_tests": 10,
+    "passed_tests": 4,
+    "failed_tests": 6,
+    "success_rate": 0.4,
+    "runtime_seconds": 54.62148308753967,
+    "test_time": "20250717_025923"
+  },
+  "test_results": {
+    "config_test": {
+      "status": "passed",
+      "details": {
+        "trading_config_loaded": true,
+        "risk_config_loaded": true,
+        "system_config_loaded": true,
+        "api_credentials_loaded": true,
+        "config_valid": true,
+        "validation_errors": [],
+        "paths_count": 2
+      }
+    },
+    "okx_api_test": {
+      "status": "passed",
+      "details": {
+        "balance_retrieved": true,
+        "balance_response_time": 0.08037972450256348,
+        "balance_data": {
+          "USDC": 59940.00000028545,
+          "USDT": 39990.0081283224,
+          "BTC": 0.099900008654,
+          "OKB": 167.83023187,
+          "ETH": 5.8e-07,
+          "DOGE": 1.374e-07
+        },
+        "orderbook_results": {
+          "BTC-USDT": {
+            "success": true,
+            "response_time": 0.09788846969604492,
+            "bid_count": 20,
+            "ask_count": 20
+          },
+          "BTC-USDC": {
+            "success": true,
+            "response_time": 0.10259032249450684,
+            "bid_count": 20,
+            "ask_count": 20
+          },
+          "USDT-USDC": {
+            "success": true,
+            "response_time": 0.06191825866699219,
+            "bid_count": 20,
+            "ask_count": 20
+          }
+        },
+        "kline_success": false,
+        "kline_response_time": 0,
+        "api_flag": "1"
+      }
+    },
+    "data_collector_test": {
+      "status": "failed",
+      "details": {
+        "error": "'DataCollector' object has no attribute 'get_latest_orderbook'",
+        "traceback": "Traceback (most recent call last):\n  File \"/home/huzefan/triangular-arbitrage-bot/test_core_comprehensive.py\", line 235, in test_data_collector\n    orderbook = data_collector.get_latest_orderbook(pair)\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAttributeError: 'DataCollector' object has no attribute 'get_latest_orderbook'\n"
+      }
+    },
+    "arbitrage_engine_test": {
+      "status": "failed",
+      "details": {
+        "error": "'ArbitrageEngine' object has no attribute 'get_stats'",
+        "traceback": "Traceback (most recent call last):\n  File \"/home/huzefan/triangular-arbitrage-bot/test_core_comprehensive.py\", line 312, in test_arbitrage_engine\n    stats = arbitrage_engine.get_stats()\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^\nAttributeError: 'ArbitrageEngine' object has no attribute 'get_stats'\n"
+      }
+    },
+    "risk_manager_test": {
+      "status": "failed",
+      "details": {
+        "error": "'RiskManager' object has no attribute 'calculate_total_balance_usd'",
+        "traceback": "Traceback (most recent call last):\n  File \"/home/huzefan/triangular-arbitrage-bot/test_core_comprehensive.py\", line 353, in test_risk_manager\n    total_balance = risk_manager.calculate_total_balance_usd(balance)\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAttributeError: 'RiskManager' object has no attribute 'calculate_total_balance_usd'. Did you mean: '_calculate_total_balance_usdt'?\n"
+      }
+    },
+    "trade_executor_test": {
+      "status": "failed",
+      "details": {
+        "error": "'TradeExecutor' object has no attribute 'get_balance'",
+        "traceback": "Traceback (most recent call last):\n  File \"/home/huzefan/triangular-arbitrage-bot/test_core_comprehensive.py\", line 410, in test_trade_executor\n    balance = trade_executor.get_balance()\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^\nAttributeError: 'TradeExecutor' object has no attribute 'get_balance'\n"
+      }
+    },
+    "websocket_test": {
+      "status": "failed",
+      "details": {
+        "error": "'WebSocketManager' object has no attribute 'get_stats'",
+        "traceback": "Traceback (most recent call last):\n  File \"/home/huzefan/triangular-arbitrage-bot/test_core_comprehensive.py\", line 507, in test_websocket_connection\n    stats = ws_manager.get_stats()\n            ^^^^^^^^^^^^^^^^^^^^\nAttributeError: 'WebSocketManager' object has no attribute 'get_stats'\n"
+      }
+    },
+    "integration_test": {
+      "status": "failed",
+      "details": {
+        "error": "'dict' object has no attribute 'total_opportunities'",
+        "traceback": "Traceback (most recent call last):\n  File \"/home/huzefan/triangular-arbitrage-bot/test_core_comprehensive.py\", line 566, in test_integration\n    opportunities_detected = system_stats.total_opportunities > 0\n                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAttributeError: 'dict' object has no attribute 'total_opportunities'\n"
+      }
+    },
+    "performance_test": {
+      "status": "passed",
+      "details": {
+        "memory_usage": {
+          "start_mb": 56.17578125,
+          "end_mb": 58.67578125,
+          "delta_mb": 2.5
+        },
+        "cpu_usage": {
+          "start_percent": 0.0,
+          "end_percent": 5.9
+        },
+        "api_performance": {
+          "balance_query": {
+            "avg_time": 0.06138873100280762,
+            "max_time": 0.06899333000183105,
+            "min_time": 0.05522465705871582
+          },
+          "orderbook_query": {
+            "avg_time": 0.10106310844421387,
+            "max_time": 0.11791515350341797,
+            "min_time": 0.0939018726348877
+          }
+        }
+      }
+    },
+    "error_handling_test": {
+      "status": "passed",
+      "details": {
+        "error_handling_results": {
+          "rapid_requests": [
+            {
+              "success": true,
+              "response_time": 0.0694584846496582
+            },
+            {
+              "success": true,
+              "response_time": 0.05986809730529785
+            },
+            {
+              "success": true,
+              "response_time": 0.060524940490722656
+            },
+            {
+              "success": true,
+              "response_time": 0.05698442459106445
+            },
+            {
+              "success": true,
+              "response_time": 0.06480979919433594
+            },
+            {
+              "success": true,
+              "response_time": 0.0586552619934082
+            },
+            {
+              "success": true,
+              "response_time": 0.059433937072753906
+            },
+            {
+              "success": true,
+              "response_time": 0.0544126033782959
+            },
+            {
+              "success": true,
+              "response_time": 0.05435013771057129
+            },
+            {
+              "success": true,
+              "response_time": 0.06271600723266602
+            }
+          ],
+          "invalid_pair_handling": true,
+          "config_error_handling": true
+        },
+        "rapid_request_success_rate": 1.0,
+        "invalid_pair_handled": true,
+        "config_error_handled": true
+      }
+    }
+  }
+}
