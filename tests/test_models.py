@@ -4,6 +4,10 @@ models目录统一测试文件
 使用真实的OKX API测试所有model类的功能
 """
 
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pytest
 import time
 import logging

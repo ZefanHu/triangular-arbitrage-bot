@@ -260,14 +260,9 @@ class DataCollector:
             # 记录API调用统计
             self._record_api_call('get_orderbook', response_time, rest_data is not None)
             
-            if rest_data and 'data' in rest_data:
-                orderbook_data = rest_data['data'][0]
-                orderbook = OrderBook(
-                    symbol=inst_id,
-                    bids=[[float(bid[0]), float(bid[1])] for bid in orderbook_data.get('bids', [])],
-                    asks=[[float(ask[0]), float(ask[1])] for ask in orderbook_data.get('asks', [])],
-                    timestamp=float(orderbook_data.get('ts', time.time()))
-                )
+            # rest_client.get_orderbook现在直接返回OrderBook对象
+            if rest_data and isinstance(rest_data, OrderBook):
+                orderbook = rest_data
                 # 更新缓存
                 with self.cache_lock:
                     self.orderbook_cache[inst_id] = orderbook
