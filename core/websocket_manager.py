@@ -207,6 +207,9 @@ class WebSocketManager:
         # 数据更新回调列表
         self.data_update_callbacks = []
         
+        # 异步任务管理
+        self.message_loop_task = None
+        
         self.logger.info(f"WebSocket管理器初始化完成，使用{'模拟盘' if self.flag == '1' else '实盘'}")
     
     async def connect(self) -> bool:
@@ -226,7 +229,7 @@ class WebSocketManager:
             self.logger.info("公共频道WebSocket连接成功")
             
             # 启动消息处理任务
-            asyncio.create_task(self._start_message_loop())
+            self.message_loop_task = asyncio.create_task(self._start_message_loop())
             
             return True
             
@@ -244,6 +247,18 @@ class WebSocketManager:
         """
         try:
             self.is_connected = False
+            
+            # 取消消息循环任务
+            if self.message_loop_task and not self.message_loop_task.done():
+                self.message_loop_task.cancel()
+                try:
+                    await self.message_loop_task
+                except asyncio.CancelledError:
+                    self.logger.debug("消息循环任务已取消")
+                except Exception as e:
+                    self.logger.warning(f"取消消息循环任务时出错: {e}")
+                finally:
+                    self.message_loop_task = None
             
             if self.ws_public:
                 await self.ws_public.close()
@@ -307,34 +322,49 @@ class WebSocketManager:
         """
         启动消息处理循环，参考websocket_example.py的subscribe_without_login
         """
-        while self.is_connected:
-            try:
-                if not self.ws_public:
-                    break
-                    
-                # 接收消息，超时时间25秒
+        try:
+            while self.is_connected:
                 try:
-                    message = await asyncio.wait_for(self.ws_public.recv(), timeout=25)
-                    await self._handle_message(message)
-                except asyncio.TimeoutError:
-                    # 超时时发送ping保持连接
-                    try:
-                        await self.ws_public.send('ping')
-                        pong_message = await self.ws_public.recv()
-                        self.logger.debug(f"收到pong: {pong_message}")
-                        continue
-                    except Exception as ping_error:
-                        self.logger.error(f"ping失败: {ping_error}")
+                    if not self.ws_public:
                         break
-                except websockets.exceptions.ConnectionClosed:
-                    self.logger.warning("WebSocket连接关闭，正在重连...")
+                        
+                    # 接收消息，超时时间25秒
+                    try:
+                        message = await asyncio.wait_for(self.ws_public.recv(), timeout=25)
+                        await self._handle_message(message)
+                    except asyncio.TimeoutError:
+                        # 超时时发送ping保持连接
+                        try:
+                            await self.ws_public.send('ping')
+                            pong_message = await self.ws_public.recv()
+                            self.logger.debug(f"收到pong: {pong_message}")
+                            continue
+                        except Exception as ping_error:
+                            self.logger.error(f"ping失败: {ping_error}")
+                            break
+                    except websockets.exceptions.ConnectionClosed:
+                        self.logger.warning("WebSocket连接关闭，正在重连...")
+                        await self._reconnect()
+                        break
+                        
+                except Exception as e:
+                    self.logger.error(f"消息循环中发生错误: {e}")
                     await self._reconnect()
                     break
-                    
-            except Exception as e:
-                self.logger.error(f"消息循环中发生错误: {e}")
-                await self._reconnect()
-                break
+        except asyncio.CancelledError:
+            self.logger.debug("消息循环任务被取消")
+            raise
+        except Exception as e:
+            self.logger.error(f"消息循环异常: {e}")
+        finally:
+            # 确保任务清理
+            self.logger.debug("消息循环任务结束，清理资源")
+            if hasattr(self, 'ws_public') and self.ws_public:
+                try:
+                    await self.ws_public.close()
+                except Exception as close_error:
+                    self.logger.debug(f"关闭WebSocket连接时出错: {close_error}")
+            self.is_connected = False
     
     async def _handle_message(self, message: str):
         """

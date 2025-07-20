@@ -698,8 +698,9 @@ class RiskManager:
         try:
             total_usdt = 0.0
             for asset, amount in balance.items():
-                if amount > 0:
-                    usdt_value = self._convert_to_usdt(asset, amount)
+                amount_float = float(amount)
+                if amount_float > 0:
+                    usdt_value = self._convert_to_usdt(asset, amount_float)
                     total_usdt += usdt_value
             return total_usdt
         except Exception as e:

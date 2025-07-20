@@ -248,13 +248,27 @@ class ArbitrageEngine:
             trade_steps = []
             
             # 直接使用配置中的交易对，不重新推断
-            for step in steps:
+            for i, step in enumerate(steps):
+                if not isinstance(step, dict):
+                    self.logger.warning(f"路径 {path_name} 第{i+1}步不是字典格式: {step}")
+                    return None
+                
+                # 支持两种格式：1) pair+action格式，2) from+to格式（测试用）
                 pair = step.get('pair')
                 action = step.get('action')
                 
+                # 如果没有pair和action，尝试从from/to转换
                 if not pair or not action:
-                    self.logger.warning(f"步骤缺少必要信息: {step}")
-                    return None
+                    from_asset = step.get('from')
+                    to_asset = step.get('to')
+                    
+                    if from_asset and to_asset:
+                        # 从from/to转换为pair和action
+                        pair, action = self._get_trading_pair(from_asset, to_asset)
+                        self.logger.debug(f"从测试格式转换: {from_asset}->{to_asset} => {pair} {action}")
+                    else:
+                        self.logger.warning(f"路径 {path_name} 第{i+1}步缺少必要信息: {step}")
+                        return None
                 
                 # 从数据采集器获取订单簿
                 order_book = self.data_collector.get_orderbook(pair)
@@ -297,43 +311,76 @@ class ArbitrageEngine:
         if not steps:
             return []
         
-        # 从第一个交易对开始推断起始资产
-        first_pair = steps[0]['pair']
-        first_action = steps[0]['action']
-        base, quote = first_pair.split('-')
-        
-        # 根据action确定起始资产
-        if first_action == 'buy':
-            # 买入base用quote，所以起始资产是quote
-            assets = [quote]
-            current_asset = base
-        else:
-            # 卖出base换quote，所以起始资产是base
-            assets = [base]
-            current_asset = quote
-        
-        assets.append(current_asset)
-        
-        # 处理后续步骤
-        for step in steps[1:]:
-            pair = step['pair']
-            action = step['action']
-            step_base, step_quote = pair.split('-')
+        try:
+            first_step = steps[0]
             
-            if action == 'buy':
-                if current_asset == step_quote:
-                    current_asset = step_base
-                elif current_asset == step_base:
-                    current_asset = step_quote
-            else:  # sell
-                if current_asset == step_base:
-                    current_asset = step_quote
-                elif current_asset == step_quote:
-                    current_asset = step_base
+            # 支持两种格式：1) pair+action格式，2) from+to格式（测试用）
+            if 'pair' in first_step and 'action' in first_step:
+                # 使用pair+action格式
+                first_pair = first_step['pair']
+                first_action = first_step['action']
+                base, quote = first_pair.split('-')
+                
+                # 根据action确定起始资产
+                if first_action == 'buy':
+                    # 买入base用quote，所以起始资产是quote
+                    assets = [quote]
+                    current_asset = base
+                else:
+                    # 卖出base换quote，所以起始资产是base
+                    assets = [base]
+                    current_asset = quote
+                
+                assets.append(current_asset)
+                
+                # 处理后续步骤
+                for step in steps[1:]:
+                    if 'pair' not in step or 'action' not in step:
+                        self.logger.warning(f"步骤缺少pair/action: {step}")
+                        return []
+                    
+                    pair = step['pair']
+                    action = step['action']
+                    step_base, step_quote = pair.split('-')
+                    
+                    if action == 'buy':
+                        if current_asset == step_quote:
+                            current_asset = step_base
+                        elif current_asset == step_base:
+                            current_asset = step_quote
+                    else:  # sell
+                        if current_asset == step_base:
+                            current_asset = step_quote
+                        elif current_asset == step_quote:
+                            current_asset = step_base
+                    
+                    assets.append(current_asset)
+                
+            elif 'from' in first_step and 'to' in first_step:
+                # 使用from+to格式（测试用）
+                assets = [first_step['from']]
+                
+                for step in steps:
+                    if 'from' not in step or 'to' not in step:
+                        self.logger.warning(f"步骤缺少from/to: {step}")
+                        return []
+                    
+                    to_asset = step['to']
+                    if to_asset not in assets:
+                        assets.append(to_asset)
+                
+                # 确保形成闭环
+                if assets[-1] != assets[0]:
+                    assets.append(assets[0])
+            else:
+                self.logger.warning(f"无法识别的步骤格式: {first_step}")
+                return []
             
-            assets.append(current_asset)
-        
-        return assets
+            return assets
+            
+        except Exception as e:
+            self.logger.error(f"提取路径时发生错误: {e}")
+            return []
     
     def calculate_path_profit_from_steps(self, trade_steps: list, amount: float) -> tuple:
         """

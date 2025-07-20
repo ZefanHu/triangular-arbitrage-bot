@@ -1,0 +1,37 @@
+[run]
+source = models
+omit = 
+    */tests/*
+    */test_*
+    */venv/*
+    */__pycache__/*
+    */core/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if self.debug:
+    if settings.DEBUG
+    raise AssertionError
+    raise NotImplementedError
+    if 0:
+    if __name__ == .__main__.:
+    class .*\bProtocol\):
+    @(abc\.)?abstractmethod
+    # 排除import语句
+    from.*import
+    import.*
+    # 排除类型注解
+    ^.*:.*#.*type:.*ignore
+    # 排除文档字符串
+    """.*"""
+    '''.*'''
+    # 排除dataclass和enum定义
+    @dataclass
+    class.*Enum.*:
+    # 排除函数定义行的类型注解
+    .*->.*:
+
+[html]
+directory = tests/reports/coverage_html

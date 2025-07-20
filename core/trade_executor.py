@@ -608,17 +608,45 @@ class TradeExecutor:
             优化后的价格
         """
         try:
+            # 确保输入价格是数字类型
+            if isinstance(price, str):
+                try:
+                    price = float(price)
+                except (ValueError, TypeError):
+                    self.logger.error(f"无法转换价格为浮点数: {price}，使用默认价格")
+                    return 0.0
+            elif not isinstance(price, (int, float)):
+                self.logger.error(f"价格类型错误: {type(price)}，使用默认价格")
+                return 0.0
+            
+            # 确保ticker数据中的价格是数字类型
+            def safe_float_convert(value, field_name):
+                try:
+                    if isinstance(value, str):
+                        return float(value)
+                    elif isinstance(value, (int, float)):
+                        return float(value)
+                    else:
+                        self.logger.warning(f"{field_name} 类型错误: {type(value)}, 值: {value}")
+                        return 0.0
+                except (ValueError, TypeError):
+                    self.logger.warning(f"无法转换 {field_name} 为浮点数: {value}")
+                    return 0.0
+            
+            best_bid = safe_float_convert(ticker.get('best_bid', 0), 'best_bid')
+            best_ask = safe_float_convert(ticker.get('best_ask', 0), 'best_ask')
+            
+            if best_bid <= 0 or best_ask <= 0:
+                self.logger.error(f"无效的市场价格数据: bid={best_bid}, ask={best_ask}")
+                return price
+            
             if side == 'buy':
                 # 买入：在买一价基础上稍微提高价格，提高成交概率
-                best_bid = ticker['best_bid']
-                # 确保价格不会过高
-                max_price = ticker['best_ask'] * 1.005
+                max_price = best_ask * 1.005
                 optimized_price = min(best_bid * (1 + self.price_adjustment), max_price)
             else:
                 # 卖出：在卖一价基础上稍微降低价格，提高成交概率
-                best_ask = ticker['best_ask']
-                # 确保价格不会过低
-                min_price = ticker['best_bid'] * 0.995
+                min_price = best_bid * 0.995
                 optimized_price = max(best_ask * (1 - self.price_adjustment), min_price)
             
             self.logger.debug(f"价格优化 {inst_id}: 原价 {price} -> 优化价 {optimized_price}")
@@ -626,7 +654,7 @@ class TradeExecutor:
             
         except Exception as e:
             self.logger.error(f"价格优化失败: {e}，使用原价格")
-            return price
+            return price if isinstance(price, (int, float)) else 0.0
     
     def _pre_trade_check(self, opportunity: ArbitrageOpportunity, 
                         investment_amount: float) -> Dict[str, any]:
