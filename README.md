@@ -57,15 +57,13 @@ triangular-arbitrage-bot/
 └── requirements.txt          # 项目依赖
 ```
 
-## 快速开始
-
-### 环境要求
+## 环境要求
 
 - Python 3.8+
-- OKX交易所账户
+- OKX交易所账户  
 - API密钥（支持现货交易权限）
 
-### 安装依赖
+## 安装依赖
 
 ```bash
 # 克隆项目
@@ -81,9 +79,10 @@ source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 ```
 
-### 配置设置
+## 配置方法
 
-1. **配置API密钥**
+### 1. 配置API密钥
+
 ```bash
 # 复制API配置模板
 cp config/secrets.ini.example config/secrets.ini
@@ -92,7 +91,7 @@ cp config/secrets.ini.example config/secrets.ini
 nano config/secrets.ini
 ```
 
-2. **secrets.ini 配置说明**
+**secrets.ini 配置说明**
 ```ini
 [api]
 api_key = your_api_key_here
@@ -103,7 +102,9 @@ passphrase = your_passphrase_here
 flag = 1
 ```
 
-3. **主要配置参数 (config/settings.ini)**
+### 2. 主要配置参数 (config/settings.ini)
+
+**交易配置**
 ```ini
 [trading]
 # 套利路径配置
@@ -114,163 +115,34 @@ path2 = {"route": "USDT->USDC->BTC->USDT", "steps": [...]}
 min_profit_threshold = 0.003    # 最小利润阈值 (0.3%)
 min_trade_amount = 100.0        # 最小交易金额 ($100)
 monitor_interval = 1.0          # 监控间隔 (秒)
+```
 
+**风险管理配置**
+```ini
 [risk]
 max_position_ratio = 0.2        # 最大仓位比例 (20%)
 max_single_trade_ratio = 0.1    # 单笔最大交易比例 (10%)
 max_daily_trades = 100          # 最大单日交易次数
+max_daily_loss_ratio = 0.05     # 最大单日损失比例 (5%)
+stop_loss_ratio = 0.1           # 强制停止交易的损失比例 (10%)
 ```
 
-## 使用指南
-
-### 基本运行命令
-
-1. **监控模式** (推荐首次使用)
-```bash
-python3 main.py --mode=monitor
+**系统配置**
+```ini
+[system]
+log_level = INFO
+log_file = logs/trading.log
+enable_performance_monitoring = true
+enable_trade_history = true
 ```
-- 只监控套利机会，不执行真实交易
-- 适合观察市场情况和验证策略
-- 会显示发现的套利机会和预期收益
-
-2. **交易模式** (实际交易)
-```bash
-python3 main.py --mode=trade
-```
-- 监控并执行真实交易
-- 需要确保API权限正确且账户余额充足
-- 会自动执行发现的套利机会
-
-3. **自定义配置文件**
-```bash
-python3 main.py --mode=monitor --config=config/settings.ini
-```
-
-### 日志查看
-
-```bash
-# 查看实时日志
-tail -f logs/trading.log
-
-# 查看交易历史
-cat logs/trade_history.json
-
-# 查看每日统计
-cat logs/daily_stats.json
-```
-
-### 性能监控
-
-系统提供实时监控界面，显示：
-- 套利机会发现数量
-- 交易执行情况
-- 实时收益统计
-- 风险指标监控
-- 系统性能指标
-
-## 测试
-
-### 运行测试套件
-
-```bash
-# 运行所有测试
-python run_tests_clean.py
-
-# 运行特定测试
-python -m pytest tests/test_arbitrage_engine.py -v
-
-# 运行集成测试
-python -m pytest tests/test_integration.py -v
-```
-
-### 测试覆盖率
-
-项目包含以下测试类型：
-- **单元测试** - 测试核心组件功能
-- **集成测试** - 测试组件间交互
-- **风险管理测试** - 验证风险控制机制
-- **交易执行测试** - 模拟交易流程
-
-测试覆盖主要模块：
-- 套利引擎 (`test_arbitrage_engine.py`)
-- 风险管理 (`test_risk_manager.py`)
-- 交易执行 (`test_trade_executor.py`)
-- 系统集成 (`test_integration.py`)
-
-## 核心功能
-
-### 套利策略
-
-系统支持两种主要套利路径：
-
-1. **路径1**: USDT → BTC → USDC → USDT
-   - 使用USDT购买BTC
-   - 出售BTC获得USDC
-   - 出售USDC获得USDT
-
-2. **路径2**: USDT → USDC → BTC → USDT
-   - 使用USDT购买USDC
-   - 使用USDC购买BTC
-   - 出售BTC获得USDT
-
-### 风险管理
-
-- **仓位控制**: 限制单次交易和总仓位规模
-- **损失控制**: 设置日损失限额和强制止损
-- **频率控制**: 防止过度频繁交易
-- **余额监控**: 实时检查账户余额
-- **网络重试**: 处理网络异常和API限制
-
-### 性能优化
-
-- **WebSocket连接**: 实时价格数据更新
-- **异步处理**: 并发处理多个套利机会
-- **内存优化**: 高效的数据结构和缓存机制
-- **CPU优化**: 优化计算算法减少延迟
 
 ## 注意事项
 
-### ⚠️ 重要风险提示
-
-1. **资金安全**
-   - 建议先在模拟环境测试 (`flag = 1`)
-   - 使用少量资金进行实盘测试
-   - 定期检查API权限设置
-
-2. **市场风险**
-   - 加密货币市场波动性高
-   - 套利机会可能快速消失
-   - 网络延迟可能影响收益
-
-3. **技术风险**
-   - 确保网络连接稳定
-   - 监控系统资源使用情况
-   - 定期备份配置和日志
-
-### 🔧 运维建议
-
-1. **监控检查**
-   - 定期查看日志文件
-   - 关注系统性能指标
-   - 监控API使用量
-
-2. **配置优化**
-   - 根据市场情况调整参数
-   - 优化套利路径配置
-   - 更新风险管理阈值
-
-3. **备份维护**
-   - 备份重要配置文件
-   - 保存交易历史数据
-   - 定期更新依赖库
-
-### 📞 技术支持
-
-如遇到问题，请检查：
-1. API配置是否正确
-2. 网络连接是否稳定
-3. 账户余额是否充足
-4. 日志文件中的错误信息
+⚠️ **重要风险提示**
+- 建议先在模拟环境测试 (`flag = 1`)
+- 使用少量资金进行实盘测试
+- 定期检查API权限设置
+- 确保网络连接稳定
 
 ## 许可证
 
