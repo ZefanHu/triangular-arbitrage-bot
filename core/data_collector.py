@@ -52,8 +52,9 @@ class DataCollector:
         self.balance_last_updated = 0
         self.balance_lock = threading.Lock()
         
-        # 数据有效性配置
-        self.data_stale_threshold = 5.0  # 5秒
+        # 数据有效性配置 - 更严格的时间阈值
+        self.data_stale_threshold = 2.0  # 2秒（从5秒降低到2秒）
+        self.arbitrage_data_threshold = 0.5  # 套利计算专用：500ms
         self.balance_sync_interval = 30.0  # 30秒
         
         # 定期同步任务
@@ -275,6 +276,45 @@ class DataCollector:
             self._record_error()
             return None
     
+    def get_arbitrage_orderbook(self, inst_id: str) -> Optional[OrderBook]:
+        """
+        获取用于套利计算的高精度订单簿数据
+        
+        使用更严格的数据新鲜度要求（500ms内）
+        
+        Args:
+            inst_id: 产品ID
+            
+        Returns:
+            订单簿对象或None
+        """
+        start_time = time.time()
+        
+        try:
+            # 首先检查缓存中的数据是否足够新鲜
+            with self.cache_lock:
+                cached_orderbook = self.orderbook_cache.get(inst_id)
+                if cached_orderbook and self._is_arbitrage_data_fresh(cached_orderbook.timestamp):
+                    # 记录缓存命中
+                    self._record_cache_hit()
+                    return cached_orderbook
+            
+            # 如果缓存数据不够新鲜，记录并返回None
+            # 套利计算不接受任何过期数据
+            if cached_orderbook:
+                data_age = time.time() - cached_orderbook.timestamp
+                self.logger.debug(f"{inst_id} 数据太旧用于套利计算: {data_age*1000:.1f}ms > {self.arbitrage_data_threshold*1000}ms")
+            else:
+                self.logger.debug(f"{inst_id} 没有缓存数据用于套利计算")
+                
+            self._record_cache_miss()
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"获取套利订单簿失败 {inst_id}: {e}")
+            self._record_api_call('get_orderbook', time.time() - start_time, True)
+            return None
+    
     def get_balance(self) -> Optional[Portfolio]:
         """
         获取账户余额（使用缓存）
@@ -373,7 +413,7 @@ class DataCollector:
             self.data_callbacks.remove(callback)
             self.logger.info(f"移除数据更新回调: {callback.__name__}")
     
-    async def _on_data_update(self, inst_id: str, action: str, bids: List, asks: List):
+    async def _on_data_update(self, inst_id: str, action: str, bids: List, asks: List, server_timestamp: str = None):
         """
         处理数据更新事件（WebSocket更新时刷新缓存）
         
@@ -382,17 +422,30 @@ class DataCollector:
             action: 操作类型
             bids: 买单数据
             asks: 卖单数据
+            server_timestamp: 服务器时间戳
         """
         try:
             # 记录WebSocket消息接收
             self._record_websocket_message()
+            
+            # 解析服务器时间戳，转换为浮点数秒
+            if server_timestamp:
+                try:
+                    # OKX返回的时间戳是毫秒级别的字符串
+                    timestamp = float(server_timestamp) / 1000.0
+                except (ValueError, TypeError):
+                    self.logger.warning(f"无效的服务器时间戳: {server_timestamp}，使用本地时间")
+                    timestamp = time.time()
+            else:
+                self.logger.debug(f"未收到服务器时间戳，使用本地时间")
+                timestamp = time.time()
             
             # 创建OrderBook对象
             orderbook = OrderBook(
                 symbol=inst_id,
                 bids=[[float(bid[0]), float(bid[1])] for bid in bids],
                 asks=[[float(ask[0]), float(ask[1])] for ask in asks],
-                timestamp=time.time()
+                timestamp=timestamp
             )
             
             # 更新缓存
@@ -489,6 +542,18 @@ class DataCollector:
             数据是否新鲜
         """
         return time.time() - timestamp < self.data_stale_threshold
+    
+    def _is_arbitrage_data_fresh(self, timestamp: float) -> bool:
+        """
+        检查数据是否足够新鲜用于套利计算（更严格的阈值）
+        
+        Args:
+            timestamp: 数据时间戳
+            
+        Returns:
+            数据是否足够新鲜用于套利计算
+        """
+        return time.time() - timestamp < self.arbitrage_data_threshold
     
     async def _balance_sync_loop(self):
         """

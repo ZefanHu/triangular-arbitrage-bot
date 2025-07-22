@@ -450,8 +450,9 @@ class WebSocketManager:
                         else:
                             self.logger.warning(f"{inst_id} checksum校验失败，需要重新订阅")
                     
-                    # 通知回调函数
-                    await self._notify_data_callbacks(inst_id, action, bids_p, asks_p)
+                    # 通知回调函数，传递服务器时间戳
+                    server_timestamp = data.get('data', [{}])[0].get('ts', '')
+                    await self._notify_data_callbacks(inst_id, action, bids_p, asks_p, server_timestamp)
                     
                     self.logger.debug(f"更新{inst_id}订单簿全量数据: 买单:{len(bids_p)}个, 卖单:{len(asks_p)}个")
                     
@@ -482,8 +483,9 @@ class WebSocketManager:
                             else:
                                 self.logger.warning(f"{inst_id} checksum校验失败，需要重新订阅")
                         
-                        # 通知回调函数
-                        await self._notify_data_callbacks(inst_id, action, bids_p, asks_p)
+                        # 通知回调函数，传递服务器时间戳
+                        server_timestamp = data.get('data', [{}])[0].get('ts', '')
+                        await self._notify_data_callbacks(inst_id, action, bids_p, asks_p, server_timestamp)
                         
                         self.logger.debug(f"更新{inst_id}订单簿增量数据: 买单:{len(bids_p)}个, 卖单:{len(asks_p)}个")
                     else:
@@ -601,7 +603,7 @@ class WebSocketManager:
             self.data_update_callbacks.remove(callback)
             self.logger.info(f"移除数据更新回调函数: {callback.__name__}")
     
-    async def _notify_data_callbacks(self, inst_id: str, action: str, bids: List, asks: List):
+    async def _notify_data_callbacks(self, inst_id: str, action: str, bids: List, asks: List, server_timestamp: str = None):
         """
         通知所有数据更新回调函数
         
@@ -610,12 +612,13 @@ class WebSocketManager:
             action: 操作类型 (snapshot/update)
             bids: 买单数据
             asks: 卖单数据
+            server_timestamp: 服务器时间戳
         """
         for callback in self.data_update_callbacks:
             try:
                 if asyncio.iscoroutinefunction(callback):
-                    await callback(inst_id, action, bids, asks)
+                    await callback(inst_id, action, bids, asks, server_timestamp)
                 else:
-                    callback(inst_id, action, bids, asks)
+                    callback(inst_id, action, bids, asks, server_timestamp)
             except Exception as e:
                 self.logger.error(f"数据更新回调函数执行失败: {e}")

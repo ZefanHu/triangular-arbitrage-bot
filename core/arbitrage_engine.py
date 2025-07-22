@@ -160,6 +160,45 @@ class ArbitrageEngine:
             timestamp=time.time()
         )
     
+    def validate_data_consistency(self, orderbooks: Dict) -> bool:
+        """
+        验证套利计算用数据的时间一致性
+        
+        Args:
+            orderbooks: 订单簿数据字典
+            
+        Returns:
+            数据是否在时间窗口内一致
+        """
+        if len(orderbooks) < 2:
+            return False
+        
+        # 获取所有时间戳
+        timestamps = []
+        for pair, orderbook in orderbooks.items():
+            if orderbook and hasattr(orderbook, 'timestamp'):
+                timestamps.append(orderbook.timestamp)
+            else:
+                self.logger.warning(f"交易对 {pair} 缺少有效时间戳")
+                return False
+        
+        if len(timestamps) < 2:
+            return False
+        
+        # 计算最大时间差
+        max_timestamp = max(timestamps)
+        min_timestamp = min(timestamps)
+        time_diff = max_timestamp - min_timestamp
+        
+        # 数据必须在200ms内
+        max_time_diff = 0.2  # 200ms
+        is_consistent = time_diff <= max_time_diff
+        
+        if not is_consistent:
+            self.logger.warning(f"数据时间一致性检查失败: 最大时间差 {time_diff*1000:.1f}ms > {max_time_diff*1000}ms")
+            
+        return is_consistent
+
     def find_opportunities(self) -> List[Dict]:
         """
         查找所有配置路径的套利机会
@@ -175,6 +214,29 @@ class ArbitrageEngine:
         self.stats['check_count'] += 1
         self.stats['last_check_time'] = time.time()
         
+        # 预先获取并验证所有需要的订单簿数据
+        required_pairs = set()
+        for path_name, path_config in self.paths.items():
+            if isinstance(path_config, dict) and 'steps' in path_config:
+                for step in path_config['steps']:
+                    if 'pair' in step:
+                        required_pairs.add(step['pair'])
+        
+        # 获取所有必需的订单簿数据（使用高精度方法）
+        orderbooks = {}
+        for pair in required_pairs:
+            orderbook = self.data_collector.get_arbitrage_orderbook(pair)
+            if orderbook:
+                orderbooks[pair] = orderbook
+            else:
+                self.logger.debug(f"无法获取 {pair} 的高精度订单簿数据，跳过此轮套利检查")
+                return opportunities
+        
+        # 数据一致性检查
+        if not self.validate_data_consistency(orderbooks):
+            self.logger.debug("数据时间一致性检查失败，跳过此轮套利检查")
+            return opportunities
+        
         # 检查所有配置的路径
         for path_name, path_config in self.paths.items():
             if not path_config:
@@ -182,9 +244,9 @@ class ArbitrageEngine:
                 
             # 优先使用新的JSON格式配置
             if isinstance(path_config, dict) and 'steps' in path_config:
-                # 新的JSON格式，直接使用配置的交易对
+                # 新的JSON格式，直接使用配置的交易对，传递已验证的订单簿数据
                 self.logger.debug(f"使用显式配置分析路径 {path_name}")
-                opportunity = self.calculate_arbitrage_from_steps(path_name, path_config)
+                opportunity = self.calculate_arbitrage_from_steps(path_name, path_config, orderbooks)
             else:
                 # 对于旧格式，建议用户升级到新格式
                 self.logger.warning(f"路径 {path_name} 使用旧格式配置，建议升级到JSON格式以获得更好的性能和准确性")
@@ -216,13 +278,14 @@ class ArbitrageEngine:
         
         return opportunities
     
-    def calculate_arbitrage_from_steps(self, path_name: str, path_config: dict) -> Optional[ArbitrageOpportunity]:
+    def calculate_arbitrage_from_steps(self, path_name: str, path_config: dict, validated_orderbooks: Dict = None) -> Optional[ArbitrageOpportunity]:
         """
         直接使用配置文件中的交易步骤计算套利机会
         
         Args:
             path_name: 路径名称
             path_config: 包含steps的路径配置
+            validated_orderbooks: 已验证一致性的订单簿数据
             
         Returns:
             套利机会信息，如果无套利机会则返回None
@@ -270,11 +333,15 @@ class ArbitrageEngine:
                         self.logger.warning(f"路径 {path_name} 第{i+1}步缺少必要信息: {step}")
                         return None
                 
-                # 从数据采集器获取订单簿
-                order_book = self.data_collector.get_orderbook(pair)
-                if not order_book:
-                    self.logger.warning(f"无法获取交易对 {pair} 的订单簿")
-                    return None
+                # 优先使用已验证的订单簿数据
+                if validated_orderbooks and pair in validated_orderbooks:
+                    order_book = validated_orderbooks[pair]
+                else:
+                    # 回退到从数据采集器获取
+                    order_book = self.data_collector.get_orderbook(pair)
+                    if not order_book:
+                        self.logger.warning(f"无法获取交易对 {pair} 的订单簿")
+                        return None
                 
                 trade_steps.append({
                     'pair': pair,
