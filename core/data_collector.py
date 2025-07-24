@@ -241,11 +241,22 @@ class DataCollector:
             if self.is_running and self.ws_manager.is_ws_connected():
                 ws_data = self.ws_manager.get_orderbook(inst_id)
                 if ws_data:
+                    # 修复时间戳处理：WebSocket返回的是毫秒时间戳字符串，需要转换为秒
+                    ws_timestamp = ws_data.get('timestamp', '')
+                    if ws_timestamp and ws_timestamp != '':
+                        try:
+                            timestamp = float(ws_timestamp) / 1000.0  # 毫秒转秒
+                        except (ValueError, TypeError):
+                            self.logger.warning(f"无效的WebSocket时间戳: {ws_timestamp}，使用本地时间")
+                            timestamp = time.time()
+                    else:
+                        timestamp = time.time()
+                    
                     orderbook = OrderBook(
                         symbol=inst_id,
                         bids=ws_data['bids'],
                         asks=ws_data['asks'],
-                        timestamp=float(ws_data.get('timestamp', time.time()))
+                        timestamp=timestamp
                     )
                     # 更新缓存
                     with self.cache_lock:

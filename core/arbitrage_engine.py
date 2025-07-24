@@ -143,6 +143,12 @@ class ArbitrageEngine:
         # 计算利润率
         final_amount, profit_rate = self.calculate_path_profit(path, self.min_trade_amount)
         
+        # 多重验证机制
+        validation_result = self._validate_arbitrage_opportunity(final_amount, profit_rate, trade_steps)
+        if not validation_result['valid']:
+            self.logger.warning(f"套利机会验证失败: {validation_result['reason']}")
+            return None
+        
         # 判断是否有套利机会
         if profit_rate <= self.min_profit_threshold:
             return None
@@ -196,6 +202,10 @@ class ArbitrageEngine:
         
         if not is_consistent:
             self.logger.warning(f"数据时间一致性检查失败: 最大时间差 {time_diff*1000:.1f}ms > {max_time_diff*1000}ms")
+            # 输出详细的时间戳信息用于调试
+            for pair, orderbook in orderbooks.items():
+                if orderbook and hasattr(orderbook, 'timestamp'):
+                    self.logger.debug(f"  {pair}: {orderbook.timestamp} ({orderbook.timestamp*1000:.0f}ms)")
             
         return is_consistent
 
@@ -352,6 +362,12 @@ class ArbitrageEngine:
             # 计算利润率
             final_amount, profit_rate = self.calculate_path_profit_from_steps(trade_steps, self.min_trade_amount)
             
+            # 多重验证机制
+            validation_result = self._validate_arbitrage_opportunity(final_amount, profit_rate, trade_steps)
+            if not validation_result['valid']:
+                self.logger.warning(f"套利机会验证失败: {validation_result['reason']}")
+                return None
+            
             # 判断是否有套利机会
             if profit_rate <= self.min_profit_threshold:
                 return None
@@ -461,8 +477,9 @@ class ArbitrageEngine:
             (最终金额, 利润率) 元组
         """
         current_amount = amount
+        self.logger.debug(f"开始套利计算: 初始金额 {amount}")
         
-        for step in trade_steps:
+        for i, step in enumerate(trade_steps):
             pair = step['pair']
             action = step['action']
             order_book = step['order_book']
@@ -477,9 +494,12 @@ class ArbitrageEngine:
                 else:
                     price = 0
                 if price == 0:
+                    self.logger.error(f"步骤{i+1}: {pair} {action} 价格为0")
                     return 0, -1
-                # 计算获得的数量（扣除手续费）
+                # 买入计算：current_amount / price（获得多少目标资产）
+                prev_amount = current_amount
                 current_amount = (current_amount / price) * (1 - self.fee_rate)
+                self.logger.debug(f"步骤{i+1}: {pair} {action} @ {price}, {prev_amount:.6f} -> {current_amount:.6f} (手续费:{self.fee_rate:.3%})")
             else:  # sell
                 # 卖出时使用买一价（bids）
                 if hasattr(order_book, 'bids') and order_book.bids:
@@ -489,13 +509,20 @@ class ArbitrageEngine:
                 else:
                     price = 0
                 if price == 0:
+                    self.logger.error(f"步骤{i+1}: {pair} {action} 价格为0")
                     return 0, -1
-                # 计算获得的数量（扣除手续费）
+                # 卖出计算：current_amount * price（获得多少计价资产）
+                prev_amount = current_amount
                 current_amount = (current_amount * price) * (1 - self.fee_rate)
-            
-            self.logger.debug(f"{pair} {action} @ {price}, amount: {current_amount}")
+                self.logger.debug(f"步骤{i+1}: {pair} {action} @ {price}, {prev_amount:.6f} -> {current_amount:.6f} (手续费:{self.fee_rate:.3%})")
         
         profit_rate = (current_amount - amount) / amount
+        self.logger.debug(f"套利计算完成: {amount} -> {current_amount:.6f}, 利润率: {profit_rate:.6%}")
+        
+        # 添加合理性检查
+        if profit_rate > 0.1:  # 10%以上的利润率可能不合理
+            self.logger.warning(f"🚨 利润率异常高: {profit_rate:.2%}, 可能存在计算错误")
+        
         return current_amount, profit_rate
     
     def _calculate_max_trade_amount_from_steps(self, trade_steps: list) -> float:
@@ -788,3 +815,88 @@ class ArbitrageEngine:
             'start_time': time.time()
         }
         self.logger.info("统计数据已重置")
+    
+    def _validate_arbitrage_opportunity(self, final_amount: float, profit_rate: float, trade_steps: list) -> dict:
+        """
+        验证套利机会的合理性（增强版）
+        
+        Args:
+            final_amount: 最终金额
+            profit_rate: 利润率
+            trade_steps: 交易步骤
+            
+        Returns:
+            {'valid': bool, 'reason': str} 验证结果
+        """
+        # 1. 基本数值检查
+        if final_amount <= 0:
+            return {'valid': False, 'reason': '最终金额必须大于0'}
+        
+        if profit_rate < -0.5:  # 损失超过50%不合理
+            return {'valid': False, 'reason': f'损失过大: {profit_rate:.2%}'}
+            
+        # 2. 异常高利润率检查 - 适应真实市场条件
+        if profit_rate > 0.01:  # 1% - 真实市场的合理阈值
+            return {'valid': False, 'reason': f'利润率异常高: {profit_rate:.2%}, 超过真实市场套利范围(>1%)'}
+            
+        # 3. 价格合理性检查
+        stablecoin_pairs = []  # 记录稳定币交易对
+        
+        for i, step in enumerate(trade_steps):
+            order_book = step.get('order_book')
+            if not order_book:
+                return {'valid': False, 'reason': f'步骤{i+1}缺少订单簿数据'}
+                
+            # 检查买卖价差
+            if hasattr(order_book, 'bids') and hasattr(order_book, 'asks'):
+                if order_book.bids and order_book.asks:
+                    bid_price = order_book.bids[0][0]
+                    ask_price = order_book.asks[0][0]
+                    spread = (ask_price - bid_price) / bid_price
+                    
+                    # 获取交易对名称
+                    pair = step.get('pair', '')
+                    
+                    # 稳定币交易对的特殊检查
+                    if 'USDT-USDC' in pair or 'USDC-USDT' in pair:
+                        stablecoin_pairs.append((pair, bid_price, ask_price, spread))
+                        
+                        # 稳定币价差不应超过0.5%
+                        if spread > 0.005:  # 0.5%
+                            return {'valid': False, 'reason': f'稳定币{pair}价差异常: {spread:.2%} > 0.5%，疑似模拟环境测试数据'}
+                        
+                        # 稳定币汇率合理性检查
+                        avg_price = (bid_price + ask_price) / 2
+                        if avg_price < 0.98 or avg_price > 1.02:  # USDT/USDC应在0.98-1.02范围内
+                            return {'valid': False, 'reason': f'稳定币{pair}汇率异常: {avg_price:.4f}，偏离1.0过多'}
+                    
+                    # 一般价差检查
+                    if spread > 0.02:  # 2%
+                        return {'valid': False, 'reason': f'步骤{i+1}价差过大: {spread:.2%}'}
+                    
+                    # 价格倒挂
+                    if bid_price >= ask_price:
+                        return {'valid': False, 'reason': f'步骤{i+1}价格倒挂: bid={bid_price}, ask={ask_price}'}
+        
+        # 4. 稳定币套利异常检查
+        if stablecoin_pairs:
+            self.logger.warning(f"检测到稳定币交易对: {[p[0] for p in stablecoin_pairs]}")
+            for pair, bid, ask, spread in stablecoin_pairs:
+                self.logger.warning(f"  {pair}: bid={bid:.4f}, ask={ask:.4f}, spread={spread:.4%}")
+        
+        # 5. 路径逻辑检查
+        if len(trade_steps) != 3:
+            return {'valid': False, 'reason': f'套利路径必须是3步，当前为{len(trade_steps)}步'}
+        
+        # 6. 手续费合理性检查
+        total_fee_impact = len(trade_steps) * self.fee_rate
+        if profit_rate > 0 and profit_rate < total_fee_impact * 1.5:
+            # 利润率应该明显超过手续费成本
+            self.logger.debug(f"利润率 {profit_rate:.2%} 接近手续费成本 {total_fee_impact:.2%}")
+        
+        # 7. 模拟环境特殊检查
+        if profit_rate > 0.005:  # 0.5%
+            self.logger.warning(f"检测到高利润率 {profit_rate:.2%}，可能为模拟环境测试数据")
+            return {'valid': False, 'reason': f'利润率 {profit_rate:.2%} 可能为模拟环境异常数据，真实市场中不太可能存在'}
+        
+        return {'valid': True, 'reason': '验证通过'}
