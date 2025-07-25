@@ -9,7 +9,7 @@ import time
 from datetime import datetime
 
 # 添加项目根目录到path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.okx_client import OKXClient
 from core.data_collector import DataCollector

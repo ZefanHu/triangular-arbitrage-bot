@@ -946,6 +946,7 @@ if __name__ == "__main__":
         "--tb=short",
         "--cov=models",
         "--cov-report=term-missing",
-        "--cov-report=html:tests/reports/coverage_html",
-        "--cov-report=xml:tests/reports/coverage.xml"
+        "--cov-report=html:reports/models_coverage_html",
+        "--cov-report=xml:reports/models_coverage.xml",
+        "--junit-xml=reports/models_junit.xml"
     ])

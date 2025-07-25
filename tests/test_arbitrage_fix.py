@@ -8,7 +8,13 @@
 import asyncio
 import time
 import logging
+import sys
+import os
 from typing import Dict, List
+
+# 添加项目根目录到path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from core.data_collector import DataCollector
 from core.arbitrage_engine import ArbitrageEngine
 from utils.logger import setup_logger

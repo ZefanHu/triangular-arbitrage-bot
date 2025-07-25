@@ -299,10 +299,9 @@ def main():
             "--tb=short",
             "--cov=core",
             "--cov-report=term-missing",
-            "--cov-report=html:tests/reports/core_coverage_html",
-            "--cov-report=xml:tests/reports/core_coverage.xml",
-            "--cov-config=tests/.core_coveragerc",
-            "--junit-xml=tests/reports/core_junit.xml"
+            "--cov-report=html:reports/core_coverage_html",
+            "--cov-report=xml:reports/core_coverage.xml",
+            "--junit-xml=reports/core_junit.xml"
         ])
     elif len(sys.argv) > 1 and sys.argv[1] == "--full":
         # 完整测试

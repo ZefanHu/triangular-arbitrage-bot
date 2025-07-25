@@ -9,8 +9,10 @@ import time
 from datetime import datetime
 import json
 
-# 添加项目根目录到path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# 添加项目根目录到path  
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 from core.okx_client import OKXClient
 from core.data_collector import DataCollector
@@ -226,7 +228,7 @@ def detailed_arbitrage_calculation(market_data, initial_amount=1000.0, fee_rate=
         fee_amount_3 = gross_usdt * fee_rate
         net_usdt = gross_usdt * (1 - fee_rate)
         
-        print(f"  🧮 计算过程:")
+        print(f"  �� 计算过程:")
         print(f"    • 总USDT数量 = {current_amount:.8f} USDC ÷ {usdt_usdc_ask:.6f} = {gross_usdt:.8f} USDT")
         print(f"    • 手续费 = {gross_usdt:.8f} × {fee_rate:.3%} = {fee_amount_3:.8f} USDT")
         print(f"    • 净得USDT = {gross_usdt:.8f} × (1 - {fee_rate:.3%}) = {net_usdt:.8f} USDT")

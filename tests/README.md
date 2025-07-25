@@ -9,7 +9,7 @@ tests/
 ├── README.md                   # 本说明文件
 ├── __init__.py                # Python包初始化文件
 ├── pytest.ini                # pytest配置文件
-├── run_core_tests.py          # 核心功能快速测试脚本
+├── test_run_core.py           # 核心功能快速测试脚本
 ├── test_core_comprehensive.py # 核心功能综合测试
 ├── test_models.py             # 模型类单元测试
 ├── logs/                      # 测试日志目录
@@ -22,7 +22,7 @@ tests/
 
 ## 主要测试文件
 
-### 1. run_core_tests.py - 核心功能测试脚本
+### 1. test_run_core.py - 核心功能测试脚本
 
 这是一个功能全面的测试入口脚本，支持快速测试和完整测试模式。
 
@@ -30,17 +30,17 @@ tests/
 
 **快速测试**（推荐日常使用）：
 ```bash
-python tests/run_core_tests.py
+python tests/test_run_core.py
 ```
 
 **完整测试**：
 ```bash
-python tests/run_core_tests.py --full
+python tests/test_run_core.py --full
 ```
 
 **覆盖率测试**：
 ```bash
-python tests/run_core_tests.py --coverage
+python tests/test_run_core.py --coverage
 ```
 
 #### 功能特点
@@ -179,17 +179,17 @@ pytest的主配置文件，定义了测试发现、执行和报告的规则。
 
 1. **开发过程中**：运行快速测试确保基本功能正常
    ```bash
-   python tests/run_core_tests.py
+   python tests/test_run_core.py
    ```
 
 2. **功能完成后**：运行完整测试确保所有功能正常
    ```bash
-   python tests/run_core_tests.py --full
+   python tests/test_run_core.py --full
    ```
 
 3. **提交代码前**：生成覆盖率报告确保测试充分
    ```bash
-   python tests/run_core_tests.py --coverage
+   python tests/test_run_core.py --coverage
    ```
 
 ### 持续集成
