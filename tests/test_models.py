@@ -944,7 +944,8 @@ if __name__ == "__main__":
         __file__, 
         "-v", 
         "--tb=short",
-        "--cov=models",
+        "--no-cov",  # Disable global coverage configuration from pytest.ini
+        "--cov=models",  # Enable models-only coverage
         "--cov-report=term-missing",
         "--cov-report=html:reports/models_coverage_html",
         "--cov-report=xml:reports/models_coverage.xml",
