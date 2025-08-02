@@ -129,13 +129,24 @@ class TradeLogger:
             enable_file_logging: 是否启用文件日志
         """
         self.console = Console()
+        
+        # 从配置管理器获取配置
+        from config.config_manager import ConfigManager
+        config_manager = ConfigManager()
+        system_config = config_manager.get_system_config()
+        
+        # 使用配置中的值，如果没有则使用默认值
+        self.enable_file_logging = system_config.get('enable_trade_history', enable_file_logging)
+        trade_history_file = system_config.get('trade_history_file', 'logs/trade_history.json')
+        
+        # 设置日志目录和文件
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(exist_ok=True)
         
         # 日志文件
-        self.enable_file_logging = enable_file_logging
-        if enable_file_logging:
-            self.trade_log_file = self.log_dir / "trade_history.json"
+        if self.enable_file_logging:
+            self.trade_log_file = Path(trade_history_file)
+            self.trade_log_file.parent.mkdir(exist_ok=True)  # 确保目录存在
             self.daily_stats_file = self.log_dir / "daily_stats.json"
         
         # 交易记录

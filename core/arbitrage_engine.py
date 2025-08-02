@@ -43,6 +43,15 @@ class ArbitrageEngine:
         self.min_profit_threshold = self.trading_config.get('parameters', {}).get('min_profit_threshold', 0.003)
         self.min_trade_amount = float(self.config_manager.get('trading', 'min_trade_amount', 100.0))
         
+        # 套利合理性验证配置
+        self.enable_profit_validation = self.config_manager.get('trading', 'enable_profit_validation', 'true').lower() == 'true'
+        self.max_profit_rate_threshold = float(self.config_manager.get('trading', 'max_profit_rate_threshold', 0.01))
+        self.max_simulated_profit_rate = float(self.config_manager.get('trading', 'max_simulated_profit_rate', 0.005))
+        self.max_price_spread = float(self.config_manager.get('trading', 'max_price_spread', 0.02))
+        self.max_stablecoin_spread = float(self.config_manager.get('trading', 'max_stablecoin_spread', 0.005))
+        self.stablecoin_price_range_min = float(self.config_manager.get('trading', 'stablecoin_price_range_min', 0.98))
+        self.stablecoin_price_range_max = float(self.config_manager.get('trading', 'stablecoin_price_range_max', 1.02))
+        
         # 监控相关
         self.monitor_interval = float(self.config_manager.get('trading', 'monitor_interval', 1.0))
         self.is_monitoring = False
@@ -63,6 +72,13 @@ class ArbitrageEngine:
         self.logger.info(f"最小利润阈值: {self.min_profit_threshold}")
         self.logger.info(f"最小交易金额: {self.min_trade_amount}")
         self.logger.info(f"监控间隔: {self.monitor_interval}秒")
+        self.logger.info(f"利润验证: {'启用' if self.enable_profit_validation else '禁用'}")
+        if self.enable_profit_validation:
+            self.logger.info(f"  最大利润率阈值: {self.max_profit_rate_threshold:.2%}")
+            self.logger.info(f"  模拟环境最大利润率: {self.max_simulated_profit_rate:.2%}")
+            self.logger.info(f"  最大价差: {self.max_price_spread:.2%}")
+            self.logger.info(f"  稳定币最大价差: {self.max_stablecoin_spread:.2%}")
+            self.logger.info(f"  稳定币价格范围: {self.stablecoin_price_range_min}-{self.stablecoin_price_range_max}")
     
     def _get_trading_pair(self, asset1: str, asset2: str) -> Tuple[str, str]:
         """
@@ -519,8 +535,8 @@ class ArbitrageEngine:
         profit_rate = (current_amount - amount) / amount
         self.logger.debug(f"套利计算完成: {amount} -> {current_amount:.6f}, 利润率: {profit_rate:.6%}")
         
-        # 添加合理性检查
-        if profit_rate > 0.1:  # 10%以上的利润率可能不合理
+        # 添加合理性检查（使用配置的阈值）
+        if self.enable_profit_validation and profit_rate > self.max_profit_rate_threshold * 10:  # 10倍于配置的最大利润率
             self.logger.warning(f"🚨 利润率异常高: {profit_rate:.2%}, 可能存在计算错误")
         
         return current_amount, profit_rate
@@ -828,6 +844,10 @@ class ArbitrageEngine:
         Returns:
             {'valid': bool, 'reason': str} 验证结果
         """
+        # 如果禁用了利润验证，直接返回验证通过
+        if not self.enable_profit_validation:
+            return {'valid': True, 'reason': '利润验证已禁用'}
+        
         # 1. 基本数值检查
         if final_amount <= 0:
             return {'valid': False, 'reason': '最终金额必须大于0'}
@@ -835,9 +855,9 @@ class ArbitrageEngine:
         if profit_rate < -0.5:  # 损失超过50%不合理
             return {'valid': False, 'reason': f'损失过大: {profit_rate:.2%}'}
             
-        # 2. 异常高利润率检查 - 适应真实市场条件
-        if profit_rate > 0.01:  # 1% - 真实市场的合理阈值
-            return {'valid': False, 'reason': f'利润率异常高: {profit_rate:.2%}, 超过真实市场套利范围(>1%)'}
+        # 2. 异常高利润率检查 - 使用配置的阈值
+        if profit_rate > self.max_profit_rate_threshold:
+            return {'valid': False, 'reason': f'利润率异常高: {profit_rate:.2%}, 超过配置阈值(>{self.max_profit_rate_threshold:.2%})'}
             
         # 3. 价格合理性检查
         stablecoin_pairs = []  # 记录稳定币交易对
@@ -861,18 +881,18 @@ class ArbitrageEngine:
                     if 'USDT-USDC' in pair or 'USDC-USDT' in pair:
                         stablecoin_pairs.append((pair, bid_price, ask_price, spread))
                         
-                        # 稳定币价差不应超过0.5%
-                        if spread > 0.005:  # 0.5%
-                            return {'valid': False, 'reason': f'稳定币{pair}价差异常: {spread:.2%} > 0.5%，疑似模拟环境测试数据'}
+                        # 稳定币价差不应超过配置的阈值
+                        if spread > self.max_stablecoin_spread:
+                            return {'valid': False, 'reason': f'稳定币{pair}价差异常: {spread:.2%} > {self.max_stablecoin_spread:.2%}，疑似模拟环境测试数据'}
                         
                         # 稳定币汇率合理性检查
                         avg_price = (bid_price + ask_price) / 2
-                        if avg_price < 0.98 or avg_price > 1.02:  # USDT/USDC应在0.98-1.02范围内
-                            return {'valid': False, 'reason': f'稳定币{pair}汇率异常: {avg_price:.4f}，偏离1.0过多'}
+                        if avg_price < self.stablecoin_price_range_min or avg_price > self.stablecoin_price_range_max:
+                            return {'valid': False, 'reason': f'稳定币{pair}汇率异常: {avg_price:.4f}，不在配置范围({self.stablecoin_price_range_min}-{self.stablecoin_price_range_max})内'}
                     
                     # 一般价差检查
-                    if spread > 0.02:  # 2%
-                        return {'valid': False, 'reason': f'步骤{i+1}价差过大: {spread:.2%}'}
+                    if spread > self.max_price_spread:
+                        return {'valid': False, 'reason': f'步骤{i+1}价差过大: {spread:.2%} > {self.max_price_spread:.2%}'}
                     
                     # 价格倒挂
                     if bid_price >= ask_price:
@@ -895,8 +915,8 @@ class ArbitrageEngine:
             self.logger.debug(f"利润率 {profit_rate:.2%} 接近手续费成本 {total_fee_impact:.2%}")
         
         # 7. 模拟环境特殊检查
-        if profit_rate > 0.005:  # 0.5%
+        if profit_rate > self.max_simulated_profit_rate:
             self.logger.warning(f"检测到高利润率 {profit_rate:.2%}，可能为模拟环境测试数据")
-            return {'valid': False, 'reason': f'利润率 {profit_rate:.2%} 可能为模拟环境异常数据，真实市场中不太可能存在'}
+            return {'valid': False, 'reason': f'利润率 {profit_rate:.2%} 超过模拟环境阈值({self.max_simulated_profit_rate:.2%})，可能为测试数据'}
         
         return {'valid': True, 'reason': '验证通过'}

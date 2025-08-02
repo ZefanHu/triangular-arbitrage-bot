@@ -138,15 +138,21 @@ class TradeExecutor:
         self.okx_client = okx_client
         self.logger = logging.getLogger(__name__)
         
+        # 从配置管理器获取配置
+        from config.config_manager import ConfigManager
+        config_manager = ConfigManager()
+        trading_config = config_manager.get_trading_config()
+        risk_config = config_manager.get_risk_config()
+        
         # 交易配置
-        self.order_timeout = 10.0  # 订单超时时间（秒）
-        self.price_adjustment = 0.001  # 价格调整幅度（0.1%）
-        self.max_retries = 3  # 最大重试次数
-        self.min_profit_threshold = 0.0005  # 最小利润阈值（0.05%）
+        self.order_timeout = trading_config['parameters'].get('order_timeout', 10.0)
+        self.price_adjustment = trading_config['parameters'].get('price_adjustment', 0.001)
+        self.max_retries = 3  # 保持硬编码，因为已从配置中移除
+        self.min_profit_threshold = trading_config['parameters'].get('min_profit_threshold', 0.0005)
         
         # 网络重试配置
-        self.network_retry_count = 3
-        self.network_retry_delay = 1.0  # 网络重试延迟（秒）
+        self.network_retry_count = risk_config.get('network_retry_count', 3)
+        self.network_retry_delay = risk_config.get('network_retry_delay', 1.0)
         
         # 余额缓存管理
         self.balance_cache = BalanceCache(okx_client)

@@ -940,14 +940,18 @@ class TestModelsWithRealAPI:
 
 if __name__ == "__main__":
     # 运行测试并生成models目录的覆盖率报告
+    import os
+    # 临时设置环境变量来覆盖pytest.ini的配置
+    os.environ['PYTEST_CURRENT_TEST'] = 'models_only'
+    
     pytest.main([
         __file__, 
         "-v", 
         "--tb=short",
-        "--no-cov",  # Disable global coverage configuration from pytest.ini
-        "--cov=models",  # Enable models-only coverage
+        "-o", "addopts=",  # 清空pytest.ini中的addopts
+        "--cov=models",  # 只测试models目录的覆盖率
         "--cov-report=term-missing",
-        "--cov-report=html:reports/models_coverage_html",
-        "--cov-report=xml:reports/models_coverage.xml",
-        "--junit-xml=reports/models_junit.xml"
+        "--cov-report=html:tests/reports/models_coverage_html",
+        "--cov-report=xml:tests/reports/models_coverage.xml",
+        "--junit-xml=tests/reports/models_junit.xml"
     ])

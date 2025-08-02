@@ -1,0 +1,20 @@
+# 测试日志文件
+logs/
+*.log
+
+# 测试输出文件
+outputs/
+*.json
+
+# Python测试缓存
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+*.coverage
+htmlcov/
+
+# 测试报告
+reports/
+*.html

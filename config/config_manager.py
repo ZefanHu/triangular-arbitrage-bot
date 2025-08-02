@@ -120,8 +120,16 @@ class ConfigManager:
                     'order_timeout': float(self.get('trading', 'order_timeout', 3.0)),
                     'min_trade_amount': float(self.get('trading', 'min_trade_amount', 100.0)),
                     'monitor_interval': float(self.get('trading', 'monitor_interval', 1.0)),
-                    'max_retries': int(self.get('trading', 'max_retries', 3)),
                     'price_adjustment': float(self.get('trading', 'price_adjustment', 0.001))
+                },
+                'validation': {
+                    'enable_profit_validation': self.get('trading', 'enable_profit_validation', 'false').lower() == 'true',
+                    'max_profit_rate_threshold': float(self.get('trading', 'max_profit_rate_threshold', 0.01)),
+                    'max_simulated_profit_rate': float(self.get('trading', 'max_simulated_profit_rate', 0.005)),
+                    'max_price_spread': float(self.get('trading', 'max_price_spread', 0.02)),
+                    'max_stablecoin_spread': float(self.get('trading', 'max_stablecoin_spread', 0.005)),
+                    'stablecoin_price_range_min': float(self.get('trading', 'stablecoin_price_range_min', 0.98)),
+                    'stablecoin_price_range_max': float(self.get('trading', 'stablecoin_price_range_max', 1.02))
                 }
             }
             return trading_config
@@ -164,8 +172,6 @@ class ConfigManager:
             system_config = {
                 'log_level': self.get('system', 'log_level', 'INFO'),
                 'log_file': self.get('system', 'log_file', 'logs/trading.log'),
-                'enable_performance_monitoring': self.get('system', 'enable_performance_monitoring', 'true').lower() == 'true',
-                'performance_log_interval': int(self.get('system', 'performance_log_interval', 300)),
                 'enable_trade_history': self.get('system', 'enable_trade_history', 'true').lower() == 'true',
                 'trade_history_file': self.get('system', 'trade_history_file', 'logs/trade_history.json')
             }
