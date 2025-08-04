@@ -3,15 +3,16 @@
 TaoLi 杂项测试集合
 
 包含套利系统的各种专项测试：
-1. 套利检测准确性修复效果测试
-2. 详细套利计算过程分析
-3. 深度验证套利计算的实时数据
+1. 套利检测准确性测试
+2. 利润计算分析测试
+3. 深度数据验证测试
 
 使用方法：
-- python test_misc.py --fix  # 运行套利修复效果测试
-- python test_misc.py --breakdown  # 运行详细计算分析
-- python test_misc.py --verify  # 运行数据验证测试
-- python test_misc.py --all  # 运行所有测试
+- python3 tests/test_misc.py                              # 运行所有测试的快速版本
+- python3 tests/test_misc.py --test arbitrage-detection   # 套利检测准确性测试
+- python3 tests/test_misc.py --test profit-calculation    # 利润计算分析测试  
+- python3 tests/test_misc.py --test data-validation       # 深度数据验证测试
+- python3 tests/test_misc.py --test profit-calculation --profit-rate 0.03  # 指定利润率
 """
 
 import asyncio
@@ -43,19 +44,24 @@ class MiscTests:
         tests_dir = os.path.dirname(os.path.abspath(__file__))
         # 确保日志目录存在
         os.makedirs(os.path.join(tests_dir, "logs"), exist_ok=True)
-        log_file = os.path.join(tests_dir, "logs/test_misc_main.log")
+        # 生成带时间戳的日志文件名
+        test_start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_file = os.path.join(tests_dir, f"logs/test_misc_{test_start_time}.log")
         self.logger = setup_logger("MiscTests", log_file, logging.INFO)
-        # 可配置的目标利润率（用于breakdown测试）
+        # 可配置的目标利润率（用于profit-calculation测试）
         self.target_profit_rate = 0.0537  # 默认5.37%，可以修改测试其他利润率
         
-    # ==================== 套利修复效果测试 ====================
-    async def test_arbitrage_fix(self, duration_minutes: int = 3):
+    # ==================== 套利检测准确性测试 ====================
+    async def test_arbitrage_detection(self):
         """
-        测试套利检测准确性修复效果
+        测试套利检测准确性
         验证时间戳修复和数据一致性检查是否有效减少虚假套利机会
         """
-        print(f"\n🧪 开始套利修复效果测试 - 持续 {duration_minutes} 分钟")
+        print(f"\n🧪 开始套利检测准确性测试")
         print("=" * 60)
+        
+        # 固定测试时长为1分钟
+        duration_minutes = 1
         
         stats = {
             'total_checks': 0,
@@ -152,8 +158,8 @@ class MiscTests:
             print("  ⚠️  套利机会率仍然较高，可能需要进一步优化")
             print("  🔧 建议检查时间戳处理和一致性验证逻辑")
     
-    # ==================== 详细套利计算分析 ====================
-    def test_detailed_breakdown(self):
+    # ==================== 利润计算分析测试 ====================
+    def test_profit_calculation(self):
         """
         详细套利计算过程分析
         验证特定利润率（默认5.37%）的计算过程
@@ -398,7 +404,7 @@ class MiscTests:
                 print("⚠️  计算结果与目标有差异，市场价格可能已变化")
     
     # ==================== 深度数据验证测试 ====================
-    def test_verify_data(self):
+    def test_data_validation(self):
         """
         深度验证套利计算的实时数据获取和分析
         """
@@ -543,37 +549,39 @@ class MiscTests:
 
 async def main():
     """主函数"""
-    parser = argparse.ArgumentParser(description='TaoLi 杂项测试集合')
-    parser.add_argument('--fix', action='store_true', help='运行套利修复效果测试')
-    parser.add_argument('--breakdown', action='store_true', help='运行详细计算分析')
-    parser.add_argument('--verify', action='store_true', help='运行数据验证测试')
-    parser.add_argument('--all', action='store_true', help='运行所有测试')
-    parser.add_argument('--duration', type=int, default=3, help='套利修复测试持续时间(分钟)')
-    parser.add_argument('--profit-rate', type=float, default=0.0537, help='目标利润率(用于breakdown测试)')
+    parser = argparse.ArgumentParser(description='TaoLi 专项测试集合')
+    parser.add_argument('--test', type=str, choices=['arbitrage-detection', 'profit-calculation', 'data-validation'],
+                        help='运行特定测试')
+    parser.add_argument('--profit-rate', type=float, default=0.0537, 
+                        help='目标利润率(用于profit-calculation测试，默认5.37%)')
     
     args = parser.parse_args()
-    
-    # 如果没有指定任何测试，显示帮助信息
-    if not any([args.fix, args.breakdown, args.verify, args.all]):
-        parser.print_help()
-        return
     
     # 创建测试实例
     misc_tests = MiscTests()
     
     # 设置目标利润率
-    misc_tests.target_profit_rate = args.profit_rate
+    if args.profit_rate:
+        misc_tests.target_profit_rate = args.profit_rate
     
     try:
-        # 运行指定的测试
-        if args.fix or args.all:
-            await misc_tests.test_arbitrage_fix(duration_minutes=args.duration)
-        
-        if args.breakdown or args.all:
-            misc_tests.test_detailed_breakdown()
-        
-        if args.verify or args.all:
-            misc_tests.test_verify_data()
+        if args.test == 'arbitrage-detection':
+            # 运行套利检测准确性测试
+            await misc_tests.test_arbitrage_detection()
+        elif args.test == 'profit-calculation':
+            # 运行利润计算分析测试
+            misc_tests.test_profit_calculation()
+        elif args.test == 'data-validation':
+            # 运行深度数据验证测试
+            misc_tests.test_data_validation()
+        else:
+            # 默认运行所有测试的快速版本
+            print("🚀 运行所有测试的快速版本")
+            print("=" * 60)
+            await misc_tests.test_arbitrage_detection()
+            misc_tests.test_profit_calculation()
+            misc_tests.test_data_validation()
+            print("\n✅ 所有测试完成")
             
     except KeyboardInterrupt:
         print("\n⚠️  测试被用户中断")

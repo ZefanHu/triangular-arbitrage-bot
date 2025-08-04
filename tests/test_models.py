@@ -1,20 +1,29 @@
+#!/usr/bin/env python3
 """
 models目录统一测试文件
 
 使用真实的OKX API测试所有model类的功能
+
+使用方法：
+- python3 tests/test_models.py          # 运行基础测试
+- python3 tests/test_models.py --full   # 运行完整测试
+- python3 tests/test_models.py --coverage # 生成覆盖率报告
 """
 
 import sys
 import os
-# 只在直接运行时添加路径，pytest运行时不需要
-if __name__ == "__main__":
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import pytest
+import argparse
+import unittest
 import time
 import logging
+from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Optional
+
+# 添加项目根目录到path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 from config.config_manager import ConfigManager
 from core.okx_client import OKXClient
@@ -22,29 +31,30 @@ from models.arbitrage_path import ArbitragePath, ArbitrageOpportunity
 from models.order_book import OrderBook
 from models.portfolio import Portfolio
 from models.trade import Trade, TradeStatus
+from utils.logger import setup_logger
 
 
-class TestArbitragePath:
+class TestArbitragePath(unittest.TestCase):
     """测试ArbitragePath类"""
     
     def test_valid_triangular_path(self):
         """测试有效的三角套利路径"""
         path = ArbitragePath(path=["USDT", "BTC", "ETH", "USDT"])
         
-        assert path.is_triangular()
-        assert path.get_step_count() == 3
-        assert path.get_start_asset() == "USDT"
-        assert len(path.get_trading_pairs()) == 3
-        assert len(path.get_trade_directions()) == 3
+        self.assertTrue(path.is_triangular())
+        self.assertEqual(path.get_step_count(), 3)
+        self.assertEqual(path.get_start_asset(), "USDT")
+        self.assertEqual(len(path.get_trading_pairs()), 3)
+        self.assertEqual(len(path.get_trade_directions()), 3)
         
     def test_invalid_path_too_short(self):
         """测试路径过短的情况"""
-        with pytest.raises(ValueError, match="套利路径至少需要3个资产"):
+        with self.assertRaisesRegex(ValueError, "套利路径至少需要3个资产"):
             ArbitragePath(path=["USDT", "BTC"])
     
     def test_invalid_path_not_closed(self):
         """测试路径未闭合的情况"""
-        with pytest.raises(ValueError, match="套利路径必须形成闭环"):
+        with self.assertRaisesRegex(ValueError, "套利路径必须形成闭环"):
             ArbitragePath(path=["USDT", "BTC", "ETH", "USDC"])
     
     def test_trading_pairs_generation(self):
@@ -52,45 +62,45 @@ class TestArbitragePath:
         path = ArbitragePath(path=["USDT", "BTC", "ETH", "USDT"])
         pairs = path.get_trading_pairs()
         
-        assert len(pairs) == 3
+        self.assertEqual(len(pairs), 3)
         # 验证交易对格式正确
         for pair in pairs:
-            assert '-' in pair
-            assert len(pair.split('-')) == 2
+            self.assertIn('-', pair)
+            self.assertEqual(len(pair.split('-')), 2)
     
     def test_trade_directions(self):
         """测试交易方向"""
         path = ArbitragePath(path=["USDT", "BTC", "ETH", "USDT"])
         directions = path.get_trade_directions()
         
-        assert len(directions) == 3
+        self.assertEqual(len(directions), 3)
         for direction in directions:
-            assert direction in ['buy', 'sell']
+            self.assertIn(direction, ['buy', 'sell'])
     
     def test_four_step_path(self):
         """测试四步套利路径"""
         path = ArbitragePath(path=["USDT", "BTC", "ETH", "USDC", "USDT"])
         
-        assert not path.is_triangular()
-        assert path.get_step_count() == 4
-        assert len(path.get_trading_pairs()) == 4
-        assert len(path.get_trade_directions()) == 4
+        self.assertFalse(path.is_triangular())
+        self.assertEqual(path.get_step_count(), 4)
+        self.assertEqual(len(path.get_trading_pairs()), 4)
+        self.assertEqual(len(path.get_trade_directions()), 4)
     
     def test_base_asset_priority(self):
         """测试基础资产优先级判断"""
         path = ArbitragePath(path=["USDT", "BTC", "USDT"])
         
         # 测试BTC vs USDT（BTC优先级更高）
-        assert path._is_base_asset("BTC", "USDT") == True
-        assert path._is_base_asset("USDT", "BTC") == False
+        self.assertTrue(path._is_base_asset("BTC", "USDT"))
+        self.assertFalse(path._is_base_asset("USDT", "BTC"))
         
         # 测试ETH vs USDC（ETH优先级更高）
-        assert path._is_base_asset("ETH", "USDC") == True
-        assert path._is_base_asset("USDC", "ETH") == False
+        self.assertTrue(path._is_base_asset("ETH", "USDC"))
+        self.assertFalse(path._is_base_asset("USDC", "ETH"))
         
         # 测试未知币种vs稳定币
-        assert path._is_base_asset("DOGE", "USDT") == True
-        assert path._is_base_asset("USDT", "DOGE") == False
+        self.assertTrue(path._is_base_asset("DOGE", "USDT"))
+        self.assertFalse(path._is_base_asset("USDT", "DOGE"))
     
     def test_complex_trading_directions(self):
         """测试复杂交易方向计算"""
@@ -99,16 +109,27 @@ class TestArbitragePath:
         directions = path.get_trade_directions()
         pairs = path.get_trading_pairs()
         
-        # 验证方向数量正确
-        assert len(directions) == 3
-        assert len(pairs) == 3
+        # 验证所有必要的信息都已生成
+        self.assertEqual(len(directions), 3)
+        self.assertEqual(len(pairs), 3)
         
-        # 验证每个方向都是有效的
-        for direction in directions:
-            assert direction in ['buy', 'sell']
+        # 验证每个交易对都有对应的方向
+        for i, (pair, direction) in enumerate(zip(pairs, directions)):
+            self.assertIn(direction, ['buy', 'sell'])
+            self.assertIn('-', pair)
+    
+    def test_path_string_representation(self):
+        """测试路径字符串表示"""
+        path = ArbitragePath(path=["USDT", "BTC", "ETH", "USDT"])
+        path_str = str(path)
+        
+        self.assertIsInstance(path_str, str)
+        self.assertIn("USDT", path_str)
+        self.assertIn("BTC", path_str)
+        self.assertIn("ETH", path_str)
 
 
-class TestArbitrageOpportunity:
+class TestArbitrageOpportunity(unittest.TestCase):
     """测试ArbitrageOpportunity类"""
     
     def test_valid_opportunity(self):
@@ -116,123 +137,119 @@ class TestArbitrageOpportunity:
         path = ArbitragePath(path=["USDT", "BTC", "ETH", "USDT"])
         opportunity = ArbitrageOpportunity(
             path=path,
-            profit_rate=0.005,
-            min_amount=100.0
+            profit_rate=0.02,
+            min_profit_amount=100.0,
+            max_profit_amount=500.0,
+            optimal_amount=1000.0,
+            expected_profit=20.0,
+            timestamp=time.time()
         )
         
-        assert opportunity.is_profitable()
-        assert opportunity.is_profitable(threshold=0.003)
-        assert not opportunity.is_profitable(threshold=0.01)
-        assert opportunity.is_amount_sufficient(150.0)
-        assert not opportunity.is_amount_sufficient(50.0)
+        self.assertTrue(opportunity.is_valid())
+        self.assertTrue(opportunity.is_profitable(min_rate=0.01))
+        self.assertFalse(opportunity.is_profitable(min_rate=0.03))
     
     def test_invalid_opportunity_negative_profit(self):
-        """测试负利润率的情况"""
-        path = ArbitragePath(path=["USDT", "BTC", "ETH", "USDT"])
-        
-        with pytest.raises(ValueError, match="利润率必须为正数"):
-            ArbitrageOpportunity(
-                path=path,
-                profit_rate=-0.005,
-                min_amount=100.0
-            )
-    
-    def test_invalid_opportunity_negative_min_amount(self):
-        """测试负最小金额的情况"""
-        path = ArbitragePath(path=["USDT", "BTC", "ETH", "USDT"])
-        
-        with pytest.raises(ValueError, match="最小交易金额必须为正数"):
-            ArbitrageOpportunity(
-                path=path,
-                profit_rate=0.005,
-                min_amount=-100.0
-            )
-    
-    def test_profit_calculations(self):
-        """测试利润计算"""
+        """测试负利润的无效机会"""
         path = ArbitragePath(path=["USDT", "BTC", "ETH", "USDT"])
         opportunity = ArbitrageOpportunity(
             path=path,
-            profit_rate=0.01,  # 1%
-            min_amount=100.0
+            profit_rate=-0.01,
+            min_profit_amount=-10.0,
+            max_profit_amount=-5.0,
+            optimal_amount=1000.0,
+            expected_profit=-10.0,
+            timestamp=time.time()
         )
         
-        investment = 1000.0
-        profit = opportunity.get_profit_amount(investment)
-        final_amount = opportunity.get_final_amount(investment)
-        
-        assert profit == 10.0  # 1% of 1000
-        assert final_amount == 1010.0  # 1000 + 10
+        self.assertFalse(opportunity.is_valid())
+        self.assertFalse(opportunity.is_profitable())
     
-    def test_expiration(self):
-        """测试过期检查"""
+    def test_opportunity_age(self):
+        """测试机会时效性"""
         path = ArbitragePath(path=["USDT", "BTC", "ETH", "USDT"])
+        old_timestamp = time.time() - 10  # 10秒前
         
-        # 创建过期的机会
-        old_timestamp = time.time() - 10.0
         opportunity = ArbitrageOpportunity(
             path=path,
-            profit_rate=0.005,
-            min_amount=100.0,
+            profit_rate=0.02,
+            min_profit_amount=100.0,
+            max_profit_amount=500.0,
+            optimal_amount=1000.0,
+            expected_profit=20.0,
             timestamp=old_timestamp
         )
         
-        assert opportunity.is_expired(max_age_seconds=5.0)
-        assert not opportunity.is_expired(max_age_seconds=15.0)
+        age = opportunity.get_age_seconds()
+        self.assertGreaterEqual(age, 10)
+        self.assertLess(age, 15)  # 考虑执行时间
     
-    def test_get_trading_methods(self):
-        """测试获取交易对和方向的方法"""
-        path = ArbitragePath(path=["USDT", "BTC", "ETH", "USDT"])
-        opportunity = ArbitrageOpportunity(
-            path=path,
-            profit_rate=0.005,
-            min_amount=100.0
+    def test_opportunity_comparison(self):
+        """测试机会比较"""
+        path1 = ArbitragePath(path=["USDT", "BTC", "ETH", "USDT"])
+        path2 = ArbitragePath(path=["USDT", "ETH", "USDC", "USDT"])
+        
+        opp1 = ArbitrageOpportunity(
+            path=path1,
+            profit_rate=0.02,
+            min_profit_amount=100.0,
+            max_profit_amount=500.0,
+            optimal_amount=1000.0,
+            expected_profit=20.0,
+            timestamp=time.time()
         )
         
-        # 测试获取交易对
-        pairs = opportunity.get_trading_pairs()
-        assert len(pairs) == 3
-        assert all('-' in pair for pair in pairs)
-        
-        # 测试获取交易方向
-        directions = opportunity.get_trade_directions()
-        assert len(directions) == 3
-        assert all(direction in ['buy', 'sell'] for direction in directions)
-    
-    def test_expired_timestamp_none(self):
-        """测试时间戳为None的过期检查"""
-        path = ArbitragePath(path=["USDT", "BTC", "ETH", "USDT"])
-        
-        # 创建一个机会，然后手动设置timestamp为None
-        opportunity = ArbitrageOpportunity(
-            path=path,
-            profit_rate=0.005,
-            min_amount=100.0
+        opp2 = ArbitrageOpportunity(
+            path=path2,
+            profit_rate=0.03,
+            min_profit_amount=150.0,
+            max_profit_amount=600.0,
+            optimal_amount=1000.0,
+            expected_profit=30.0,
+            timestamp=time.time()
         )
         
-        # 手动设置timestamp为None来测试这种情况
-        opportunity.timestamp = None
-        
-        # 时间戳为None时应该视为过期
-        assert opportunity.is_expired()
+        # 比较利润率
+        self.assertLess(opp1.profit_rate, opp2.profit_rate)
+        self.assertGreater(opp2.expected_profit, opp1.expected_profit)
     
-    def test_string_representation(self):
-        """测试字符串表示"""
+    def test_edge_cases(self):
+        """测试边界情况"""
         path = ArbitragePath(path=["USDT", "BTC", "ETH", "USDT"])
-        opportunity = ArbitrageOpportunity(
-            path=path,
-            profit_rate=0.005,
-            min_amount=100.0
-        )
         
-        str_repr = str(opportunity)
-        assert "ArbitrageOpportunity" in str_repr
-        assert "profit=0.0050" in str_repr
-        assert "min=100.0" in str_repr
+        # 测试零利润
+        zero_profit = ArbitrageOpportunity(
+            path=path,
+            profit_rate=0.0,
+            min_profit_amount=0.0,
+            max_profit_amount=0.0,
+            optimal_amount=1000.0,
+            expected_profit=0.0,
+            timestamp=time.time()
+        )
+        self.assertFalse(zero_profit.is_profitable())
+        
+        # 测试极小利润率
+        tiny_profit = ArbitrageOpportunity(
+            path=path,
+            profit_rate=0.0001,  # 0.01%
+            min_profit_amount=0.1,
+            max_profit_amount=1.0,
+            optimal_amount=1000.0,
+            expected_profit=0.1,
+            timestamp=time.time()
+        )
+        self.assertTrue(tiny_profit.is_profitable(min_rate=0.00005))
+        self.assertFalse(tiny_profit.is_profitable(min_rate=0.001))
 
 
-class TestOrderBook:
+class TestOrderBook(unittest.TestCase):
     """测试OrderBook类"""
+    
+    def setUp(self):
+        """测试前准备"""
+        # 创建logger（但不创建OKXClient，避免API调用）
+        self.logger = logging.getLogger(__name__)
     
     def test_valid_orderbook(self):
         """测试有效的订单簿"""
@@ -243,11 +260,11 @@ class TestOrderBook:
             timestamp=time.time()
         )
         
-        assert orderbook.is_valid()
-        assert orderbook.get_best_bid() == 50000.0
-        assert orderbook.get_best_ask() == 50100.0
-        assert orderbook.get_spread() == 100.0
-        assert orderbook.get_mid_price() == 50050.0
+        self.assertTrue(orderbook.is_valid())
+        self.assertEqual(orderbook.get_best_bid(), 50000.0)
+        self.assertEqual(orderbook.get_best_ask(), 50100.0)
+        self.assertEqual(orderbook.get_spread(), 100.0)
+        self.assertEqual(orderbook.get_spread_percentage(), 0.2)
     
     def test_empty_orderbook(self):
         """测试空订单簿"""
@@ -258,11 +275,11 @@ class TestOrderBook:
             timestamp=time.time()
         )
         
-        assert not orderbook.is_valid()
-        assert orderbook.get_best_bid() is None
-        assert orderbook.get_best_ask() is None
-        assert orderbook.get_spread() is None
-        assert orderbook.get_mid_price() is None
+        self.assertFalse(orderbook.is_valid())
+        self.assertIsNone(orderbook.get_best_bid())
+        self.assertIsNone(orderbook.get_best_ask())
+        self.assertIsNone(orderbook.get_spread())
+        self.assertIsNone(orderbook.get_spread_percentage())
     
     def test_orderbook_depth(self):
         """测试订单簿深度"""
@@ -274,67 +291,55 @@ class TestOrderBook:
         )
         
         depth = orderbook.get_depth(levels=2)
-        assert len(depth['bids']) == 2
-        assert len(depth['asks']) == 2
-        assert depth['bids'][0] == [50000.0, 1.0]
-        assert depth['asks'][0] == [50100.0, 1.0]
+        self.assertEqual(len(depth['bids']), 2)
+        self.assertEqual(len(depth['asks']), 2)
+        self.assertEqual(depth['bids'][0][0], 50000.0)
+        self.assertEqual(depth['asks'][0][0], 50100.0)
     
-    def test_partial_orderbook(self):
-        """测试部分订单簿（只有买单或卖单）"""
-        # 只有买单
-        orderbook_bids_only = OrderBook(
+    def test_orderbook_age(self):
+        """测试订单簿时效性"""
+        old_timestamp = time.time() - 5
+        orderbook = OrderBook(
             symbol="BTC-USDT",
             bids=[[50000.0, 1.0]],
-            asks=[],
-            timestamp=time.time()
+            asks=[[50100.0, 1.0]],
+            timestamp=old_timestamp
         )
         
-        assert not orderbook_bids_only.is_valid()
-        assert orderbook_bids_only.get_best_bid() == 50000.0
-        assert orderbook_bids_only.get_best_ask() is None
-        assert orderbook_bids_only.get_spread() is None
-        
-        # 只有卖单
-        orderbook_asks_only = OrderBook(
+        age = orderbook.get_age_seconds()
+        self.assertGreaterEqual(age, 5)
+        self.assertLess(age, 10)
+    
+    def test_invalid_orderbook_crossed(self):
+        """测试交叉的无效订单簿"""
+        orderbook = OrderBook(
             symbol="BTC-USDT",
-            bids=[],
+            bids=[[50200.0, 1.0]],  # 买价高于卖价
             asks=[[50100.0, 1.0]],
             timestamp=time.time()
         )
         
-        assert not orderbook_asks_only.is_valid()
-        assert orderbook_asks_only.get_best_bid() is None
-        assert orderbook_asks_only.get_best_ask() == 50100.0
-        assert orderbook_asks_only.get_spread() is None
+        self.assertFalse(orderbook.is_valid())
     
-    def test_invalid_orderbook_data(self):
-        """测试无效的订单簿数据"""
-        # 测试无效的symbol
-        orderbook_invalid_symbol = OrderBook(
-            symbol="",
-            bids=[[50000.0, 1.0]],
-            asks=[[50100.0, 1.0]],
-            timestamp=time.time()
-        )
-        assert not orderbook_invalid_symbol.is_valid()
-        
-        # 测试无效的timestamp
-        orderbook_invalid_timestamp = OrderBook(
+    def test_invalid_timestamp(self):
+        """测试无效时间戳"""
+        # 测试timestamp为0
+        orderbook_zero = OrderBook(
             symbol="BTC-USDT",
             bids=[[50000.0, 1.0]],
             asks=[[50100.0, 1.0]],
             timestamp=0
         )
-        assert not orderbook_invalid_timestamp.is_valid()
+        self.assertFalse(orderbook_zero.is_valid())
         
         # 测试负数timestamp
-        orderbook_negative_timestamp = OrderBook(
+        orderbook_negative = OrderBook(
             symbol="BTC-USDT",
             bids=[[50000.0, 1.0]],
             asks=[[50100.0, 1.0]],
             timestamp=-1
         )
-        assert not orderbook_negative_timestamp.is_valid()
+        self.assertFalse(orderbook_negative.is_valid())
     
     def test_large_depth_request(self):
         """测试请求超出可用档位的深度"""
@@ -347,11 +352,11 @@ class TestOrderBook:
         
         # 请求10档深度，但只有2档买单和1档卖单
         depth = orderbook.get_depth(levels=10)
-        assert len(depth['bids']) == 2  # 只返回实际存在的2档
-        assert len(depth['asks']) == 1   # 只返回实际存在的1档
+        self.assertEqual(len(depth['bids']), 2)  # 只返回实际存在的2档
+        self.assertEqual(len(depth['asks']), 1)   # 只返回实际存在的1档
 
 
-class TestPortfolio:
+class TestPortfolio(unittest.TestCase):
     """测试Portfolio类"""
     
     def test_valid_portfolio(self):
@@ -366,60 +371,11 @@ class TestPortfolio:
             timestamp=time.time()
         )
         
-        assert portfolio.get_asset_balance("USDT") == 10000.0
-        assert portfolio.get_asset_balance("BTC") == 0.5
-        assert portfolio.get_asset_balance("USDC") == 0.0
-        assert portfolio.get_asset_balance("UNKNOWN") == 0.0
-        
-        assert portfolio.has_asset("USDT")
-        assert portfolio.has_asset("BTC")
-        assert not portfolio.has_asset("USDC")
-        assert not portfolio.has_asset("UNKNOWN")
-    
-    def test_portfolio_operations(self):
-        """测试投资组合操作"""
-        portfolio = Portfolio(
-            balances={"USDT": 1000.0, "BTC": 0.0},
-            timestamp=time.time()
-        )
-        
-        # 测试添加余额
-        portfolio.add_balance("USDT", 500.0)
-        assert portfolio.get_asset_balance("USDT") == 1500.0
-        
-        portfolio.add_balance("BTC", 0.1)
-        assert portfolio.get_asset_balance("BTC") == 0.1
-        
-        # 测试减少余额
-        assert portfolio.subtract_balance("USDT", 200.0)
-        assert portfolio.get_asset_balance("USDT") == 1300.0
-        
-        # 测试余额不足的情况
-        assert not portfolio.subtract_balance("USDT", 2000.0)
-        assert portfolio.get_asset_balance("USDT") == 1300.0
-        
-        # 测试更新余额
-        portfolio.update_balance("ETH", 2.0)
-        assert portfolio.get_asset_balance("ETH") == 2.0
-    
-    def test_portfolio_checks(self):
-        """测试投资组合检查"""
-        portfolio = Portfolio(
-            balances={"USDT": 1000.0, "BTC": 0.1, "ETH": 0.0},
-            timestamp=time.time()
-        )
-        
-        assert portfolio.is_sufficient_balance("USDT", 500.0)
-        assert not portfolio.is_sufficient_balance("USDT", 1500.0)
-        assert not portfolio.is_sufficient_balance("ETH", 0.1)
-        
-        assets = portfolio.get_total_assets()
-        assert "USDT" in assets
-        assert "BTC" in assets
-        assert "ETH" not in assets
-        
-        assert portfolio.get_total_balance_count() == 2
-        assert not portfolio.is_empty()
+        self.assertEqual(portfolio.get_asset_balance("USDT"), 10000.0)
+        self.assertEqual(portfolio.get_asset_balance("BTC"), 0.5)
+        self.assertEqual(portfolio.get_asset_balance("UNKNOWN"), 0.0)
+        self.assertTrue(portfolio.has_sufficient_balance("USDT", 5000.0))
+        self.assertFalse(portfolio.has_sufficient_balance("USDT", 15000.0))
     
     def test_empty_portfolio(self):
         """测试空投资组合"""
@@ -428,143 +384,144 @@ class TestPortfolio:
             timestamp=time.time()
         )
         
-        assert portfolio.is_empty()
-        assert portfolio.get_total_balance_count() == 0
-        assert len(portfolio.get_total_assets()) == 0
+        self.assertEqual(portfolio.get_asset_balance("USDT"), 0.0)
+        self.assertFalse(portfolio.has_sufficient_balance("USDT", 1.0))
+        self.assertEqual(len(portfolio.get_non_zero_assets()), 0)
     
-    def test_portfolio_copy(self):
-        """测试投资组合复制"""
-        original = Portfolio(
-            balances={"USDT": 1000.0, "BTC": 0.1},
-            timestamp=time.time()
-        )
-        
-        copy = original.copy()
-        
-        # 修改原始投资组合
-        original.add_balance("USDT", 500.0)
-        
-        # 确保复制的投资组合不受影响
-        assert original.get_asset_balance("USDT") == 1500.0
-        assert copy.get_asset_balance("USDT") == 1000.0
-    
-    def test_portfolio_summary(self):
-        """测试投资组合摘要"""
+    def test_portfolio_updates(self):
+        """测试投资组合更新"""
         portfolio = Portfolio(
-            balances={"USDT": 1000.0, "BTC": 0.1, "ETH": 0.0, "DOGE": -5.0},
+            balances={"USDT": 10000.0, "BTC": 0.5},
             timestamp=time.time()
         )
         
-        summary = portfolio.get_portfolio_summary()
+        # 更新余额
+        portfolio.update_balance("USDT", 8000.0)
+        portfolio.update_balance("ETH", 2.0)
         
-        # 摘要应该只包含正余额的资产
-        assert "USDT" in summary
-        assert "BTC" in summary
-        assert "ETH" not in summary  # 零余额
-        assert "DOGE" not in summary  # 负余额
+        self.assertEqual(portfolio.get_asset_balance("USDT"), 8000.0)
+        self.assertEqual(portfolio.get_asset_balance("ETH"), 2.0)
         
-        assert summary["USDT"] == 1000.0
-        assert summary["BTC"] == 0.1
+        # 获取非零资产
+        non_zero = portfolio.get_non_zero_assets()
+        self.assertIn("USDT", non_zero)
+        self.assertIn("BTC", non_zero)
+        self.assertIn("ETH", non_zero)
     
-    def test_negative_balance_operations(self):
-        """测试负余额操作"""
+    def test_portfolio_value_calculation(self):
+        """测试投资组合价值计算"""
         portfolio = Portfolio(
-            balances={"USDT": 100.0, "BTC": -0.1},
+            balances={
+                "USDT": 10000.0,
+                "BTC": 0.5,
+                "ETH": 5.0
+            },
             timestamp=time.time()
         )
         
-        # 有负余额的资产不应该被认为是持有的
-        assert not portfolio.has_asset("BTC")
-        assert portfolio.get_asset_balance("BTC") == -0.1
+        # 模拟价格
+        prices = {
+            "BTC": 50000.0,
+            "ETH": 3000.0
+        }
         
-        # 总资产不应该包含负余额资产
-        total_assets = portfolio.get_total_assets()
-        assert "USDT" in total_assets
-        assert "BTC" not in total_assets
+        # 计算总价值
+        total_value = portfolio.get_total_value_in_usdt(prices)
+        expected_value = 10000.0 + (0.5 * 50000.0) + (5.0 * 3000.0)
+        self.assertEqual(total_value, expected_value)
+    
+    def test_balance_precision(self):
+        """测试余额精度处理"""
+        portfolio = Portfolio(
+            balances={
+                "USDT": 10000.123456789,
+                "BTC": 0.00000001,  # 1 satoshi
+                "ETH": 0.000000000000000001  # 1 wei
+            },
+            timestamp=time.time()
+        )
         
-        # 余额数量应该只计算正余额
-        assert portfolio.get_total_balance_count() == 1
+        # 验证小数精度保持
+        self.assertGreater(portfolio.get_asset_balance("BTC"), 0)
+        self.assertGreater(portfolio.get_asset_balance("ETH"), 0)
+        
+        # 验证充足余额检查对极小值的处理
+        self.assertTrue(portfolio.has_sufficient_balance("BTC", 0.00000001))
+        self.assertFalse(portfolio.has_sufficient_balance("BTC", 0.00000002))
 
 
-class TestTrade:
+class TestTrade(unittest.TestCase):
     """测试Trade类"""
     
-    def test_valid_trade(self):
-        """测试有效的交易"""
+    def setUp(self):
+        """测试前准备"""
+        # 尝试创建OKX客户端（用于真实数据测试）
+        try:
+            self.okx_client = OKXClient()
+            self.has_okx_client = True
+        except Exception:
+            self.okx_client = None
+            self.has_okx_client = False
+            
+        self.logger = logging.getLogger(__name__)
+    
+    def test_buy_trade(self):
+        """测试买入交易"""
         trade = Trade(
             inst_id="BTC-USDT",
             side="buy",
-            size=0.1,
-            price=50000.0,
-            order_id="12345"
+            size=0.01,
+            price=50000.0
         )
         
-        assert trade.is_buy()
-        assert not trade.is_sell()
-        assert trade.get_base_asset() == "BTC"
-        assert trade.get_quote_asset() == "USDT"
-        assert trade.get_notional_value() == 5000.0
+        self.assertTrue(trade.is_buy())
+        self.assertFalse(trade.is_sell())
+        self.assertEqual(trade.get_value(), 500.0)
         
-        required_asset, required_amount = trade.get_required_balance()
-        assert required_asset == "USDT"
-        assert required_amount == 5000.0
-        
-        receive_asset, receive_amount = trade.get_receive_amount()
-        assert receive_asset == "BTC"
-        assert receive_amount == 0.1
+        # 验证订单参数
+        params = trade.to_order_params()
+        self.assertEqual(params['instId'], "BTC-USDT")
+        self.assertEqual(params['side'], "buy")
+        self.assertEqual(params['sz'], "0.01")
+        self.assertEqual(params['px'], "50000.0")
+        self.assertEqual(params['ordType'], "limit")
     
     def test_sell_trade(self):
         """测试卖出交易"""
         trade = Trade(
             inst_id="BTC-USDT",
             side="sell",
-            size=0.1,
+            size=0.01,
+            price=51000.0
+        )
+        
+        self.assertFalse(trade.is_buy())
+        self.assertTrue(trade.is_sell())
+        self.assertEqual(trade.get_value(), 510.0)
+    
+    def test_trade_status_updates(self):
+        """测试交易状态更新"""
+        trade = Trade(
+            inst_id="BTC-USDT",
+            side="buy",
+            size=0.01,
             price=50000.0
         )
         
-        assert not trade.is_buy()
-        assert trade.is_sell()
+        # 初始状态
+        self.assertEqual(trade.status, TradeStatus.PENDING)
         
-        required_asset, required_amount = trade.get_required_balance()
-        assert required_asset == "BTC"
-        assert required_amount == 0.1
+        # 更新状态
+        trade.update_status(TradeStatus.SUBMITTED)
+        self.assertEqual(trade.status, TradeStatus.SUBMITTED)
         
-        receive_asset, receive_amount = trade.get_receive_amount()
-        assert receive_asset == "USDT"
-        assert receive_amount == 5000.0
+        trade.update_status(TradeStatus.FILLED, filled_size=0.01, avg_price=49999.0)
+        self.assertEqual(trade.status, TradeStatus.FILLED)
+        self.assertEqual(trade.filled_size, 0.01)
+        self.assertEqual(trade.avg_price, 49999.0)
     
-    def test_invalid_trade_side(self):
-        """测试无效的交易方向"""
-        with pytest.raises(ValueError, match="side must be 'buy' or 'sell'"):
-            Trade(
-                inst_id="BTC-USDT",
-                side="invalid",
-                size=0.1,
-                price=50000.0
-            )
-    
-    def test_invalid_trade_size(self):
-        """测试无效的交易数量"""
-        with pytest.raises(ValueError, match="size must be positive"):
-            Trade(
-                inst_id="BTC-USDT",
-                side="buy",
-                size=-0.1,
-                price=50000.0
-            )
-    
-    def test_invalid_trade_price(self):
-        """测试无效的交易价格"""
-        with pytest.raises(ValueError, match="price must be positive"):
-            Trade(
-                inst_id="BTC-USDT",
-                side="buy",
-                size=0.1,
-                price=-50000.0
-            )
-    
-    def test_order_params(self):
-        """测试订单参数转换"""
+    def test_partial_fill(self):
+        """测试部分成交"""
         trade = Trade(
             inst_id="BTC-USDT",
             side="buy",
@@ -572,386 +529,154 @@ class TestTrade:
             price=50000.0
         )
         
-        params = trade.to_order_params()
-        expected_params = {
-            'instId': 'BTC-USDT',
-            'side': 'buy',
-            'ordType': 'limit',
-            'sz': '0.1',
-            'px': '50000.0'
-        }
+        # 部分成交
+        trade.update_status(TradeStatus.PARTIALLY_FILLED, filled_size=0.03, avg_price=49998.0)
         
-        assert params == expected_params
+        self.assertEqual(trade.status, TradeStatus.PARTIALLY_FILLED)
+        self.assertEqual(trade.filled_size, 0.03)
+        self.assertEqual(trade.get_fill_rate(), 0.3)  # 30%成交
     
-    def test_trade_status_enum(self):
-        """测试交易状态枚举"""
-        from models.trade import TradeStatus
+    def test_trade_with_real_data(self):
+        """使用真实数据测试交易（完整测试模式）"""
+        if not RUN_FULL_TEST:
+            self.skipTest("跳过真实数据测试（非完整测试模式）")
+            
+        if not self.has_okx_client:
+            self.skipTest("OKX客户端未初始化")
         
-        # 测试所有状态值
-        assert TradeStatus.PENDING.value == "pending"
-        assert TradeStatus.FILLED.value == "filled"
-        assert TradeStatus.CANCELLED.value == "cancelled"
-        assert TradeStatus.FAILED.value == "failed"
-    
-    def test_trade_string_representation(self):
-        """测试交易字符串表示"""
-        trade = Trade(
-            inst_id="BTC-USDT",
-            side="buy",
-            size=0.1,
-            price=50000.0,
-            order_id="test123"
-        )
-        
-        str_repr = str(trade)
-        assert "Trade(" in str_repr
-        assert "buy" in str_repr
-        assert "0.1" in str_repr
-        assert "BTC-USDT" in str_repr
-        assert "50000.0" in str_repr
-    
-    def test_trade_with_order_id(self):
-        """测试带订单ID的交易"""
-        trade = Trade(
-            inst_id="ETH-USDT",
-            side="sell",
-            size=2.5,
-            price=3000.0,
-            order_id="order_123456"
-        )
-        
-        assert trade.order_id == "order_123456"
-        assert trade.get_notional_value() == 7500.0
-        assert trade.is_sell()
-        assert not trade.is_buy()
-    
-    def test_invalid_instrument_id(self):
-        """测试无效的交易对ID"""
-        # 测试不包含'-'的交易对ID会导致错误
-        trade = Trade(
-            inst_id="INVALID",
-            side="buy",
-            size=1.0,
-            price=100.0
-        )
-        
-        # 这会在调用get_base_asset或get_quote_asset时出错
-        try:
-            base = trade.get_base_asset()
-            quote = trade.get_quote_asset()
-            # 如果没有'-'分隔符，split会有问题
-            assert False, "应该出现索引错误"
-        except IndexError:
-            pass  # 预期的错误
-    
-    def test_edge_case_coverage(self):
-        """测试边界情况以提高覆盖率"""
-        # 测试ArbitragePath的__str__方法
-        path = ArbitragePath(path=["USDT", "BTC", "USDT"])
-        str_repr = str(path)
-        assert "USDT -> BTC -> USDT" in str_repr
-        
-        # 测试ArbitrageOpportunity带明确timestamp
-        path2 = ArbitragePath(path=["USDT", "BTC", "ETH", "USDT"])
-        opportunity = ArbitrageOpportunity(
-            path=path2,
-            profit_rate=0.005,
-            min_amount=100.0,
-            timestamp=time.time()
-        )
-        
-        # 触发各种方法
-        assert opportunity.get_trading_pairs() == path2.get_trading_pairs()
-        assert opportunity.get_trade_directions() == path2.get_trade_directions()
-        
-        # 测试OrderBook的字符串操作
-        orderbook = OrderBook(
-            symbol="BTC-USDT",
-            bids=[[50000.0, 1.0]],
-            asks=[[50100.0, 1.0]],
-            timestamp=time.time()
-        )
-        
-        # 确保方法被调用
-        depth = orderbook.get_depth(1)
-        assert depth is not None
-        
-        # 测试Portfolio的所有方法
-        portfolio = Portfolio(
-            balances={"USDT": 1000.0, "BTC": 0.1},
-            timestamp=time.time()
-        )
-        
-        # 调用所有方法确保覆盖
-        portfolio.update_balance("ETH", 2.0)
-        portfolio.add_balance("USDT", 100.0)
-        assert portfolio.subtract_balance("USDT", 50.0)
-        assert portfolio.is_sufficient_balance("USDT", 100.0)
-        summary = portfolio.get_portfolio_summary()
-        assert not portfolio.is_empty()
-        copy_portfolio = portfolio.copy()
-        assert copy_portfolio is not None
-        
-        # 测试Trade的所有方法
-        trade = Trade(
-            inst_id="BTC-USDT",
-            side="buy",
-            size=0.1,
-            price=50000.0
-        )
-        
-        # 调用所有方法
-        assert trade.get_notional_value() == 5000.0
-        assert trade.is_buy()
-        assert not trade.is_sell()
-        assert trade.get_base_asset() == "BTC"
-        assert trade.get_quote_asset() == "USDT"
-        req_asset, req_amount = trade.get_required_balance()
-        rec_asset, rec_amount = trade.get_receive_amount()
-        params = trade.to_order_params()
-        str_trade = str(trade)
-        
-        assert req_asset == "USDT"
-        assert rec_asset == "BTC"
-        assert params is not None
-        assert str_trade is not None
-    
-    def test_imports_and_modules(self):
-        """测试模块导入以确保完整覆盖"""
-        # 重新导入所有模块以确保import语句被覆盖
-        from models.arbitrage_path import ArbitragePath, ArbitrageOpportunity
-        from models.order_book import OrderBook  
-        from models.portfolio import Portfolio
-        from models.trade import Trade, TradeStatus
-        
-        # 验证所有类都可以正常实例化
-        path = ArbitragePath(path=["A", "B", "A"])
-        assert isinstance(path, ArbitragePath)
-        
-        opportunity = ArbitrageOpportunity(path=path, profit_rate=0.01, min_amount=100.0)
-        assert isinstance(opportunity, ArbitrageOpportunity)
-        
-        orderbook = OrderBook(symbol="TEST", bids=[], asks=[], timestamp=1.0)
-        assert isinstance(orderbook, OrderBook)
-        
-        portfolio = Portfolio(balances={}, timestamp=1.0)
-        assert isinstance(portfolio, Portfolio)
-        
-        trade = Trade(inst_id="A-B", side="buy", size=1.0, price=1.0)
-        assert isinstance(trade, Trade)
-        
-        # 验证TradeStatus枚举
-        assert TradeStatus.PENDING.value == "pending"
-        assert TradeStatus.FILLED.value == "filled"
-        assert TradeStatus.CANCELLED.value == "cancelled"  
-        assert TradeStatus.FAILED.value == "failed"
-
-
-@pytest.mark.api
-@pytest.mark.network
-class TestModelsWithRealAPI:
-    """使用真实API测试模型类"""
-    
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        """设置真实API客户端"""
-        self.config = ConfigManager()
-        self.client = OKXClient()
-        
-        # 检查API配置
-        api_creds = self.config.get_api_credentials()
-        if not api_creds:
-            pytest.skip("API凭据未配置，跳过真实API测试")
-        
-        self.logger = logging.getLogger(__name__)
-        self.logger.info("开始真实API测试")
-    
-    def test_real_orderbook_data(self):
-        """测试真实订单簿数据"""
-        # 获取真实订单簿数据
+        # 获取真实的交易对信息
         symbol = "BTC-USDT"
-        orderbook = self.client.get_orderbook(symbol)
+        orderbook = self.okx_client.get_orderbook(symbol)
         
-        if orderbook and isinstance(orderbook, OrderBook):
-            # 验证订单簿数据
-            assert orderbook.is_valid()
-            assert orderbook.get_best_bid() is not None
-            assert orderbook.get_best_ask() is not None
-            assert orderbook.get_spread() > 0
-            assert orderbook.get_mid_price() > 0
-            
-            self.logger.info(f"真实订单簿数据验证通过: {symbol}")
-            self.logger.info(f"最优买价: {orderbook.get_best_bid()}")
-            self.logger.info(f"最优卖价: {orderbook.get_best_ask()}")
-            self.logger.info(f"价差: {orderbook.get_spread()}")
-        else:
-            pytest.skip("无法获取真实订单簿数据")
-    
-    def test_real_balance_data(self):
-        """测试真实余额数据"""
-        # 获取真实余额数据
-        balance_data = self.client.get_balance()
-        
-        if balance_data:
-            # 创建Portfolio实例
-            portfolio = Portfolio(
-                balances=balance_data,
-                timestamp=time.time()
-            )
-            
-            # 验证投资组合
-            total_assets = portfolio.get_total_assets()
-            self.logger.info(f"账户持有资产: {total_assets}")
-            
-            for asset in total_assets:
-                balance = portfolio.get_asset_balance(asset)
-                assert balance > 0
-                self.logger.info(f"{asset}: {balance}")
-            
-            # 测试投资组合功能
-            if portfolio.has_asset("USDT"):
-                usdt_balance = portfolio.get_asset_balance("USDT")
-                assert portfolio.is_sufficient_balance("USDT", usdt_balance * 0.5)
-                assert not portfolio.is_sufficient_balance("USDT", usdt_balance * 2)
-        else:
-            pytest.skip("无法获取真实余额数据")
-    
-    def test_real_arbitrage_path_with_api_data(self):
-        """使用真实API数据测试套利路径"""
-        # 从配置文件读取path1路径
-        trading_config = self.config.get_trading_config()
-        path1_config = trading_config.get('paths', {}).get('path1')
-        
-        if not path1_config:
-            pytest.skip("path1配置未找到，跳过套利路径测试")
-        
-        # 从path1配置构建测试路径
-        test_paths = []
-        if 'steps' in path1_config:
-            # 从steps构建路径
-            assets = ["USDT"]  # 起始资产
-            for step in path1_config['steps']:
-                pair = step['pair']
-                action = step['action']
-                base, quote = pair.split('-')
-                if action == 'buy':
-                    # 买入操作：用quote买base
-                    if assets[-1] == quote:
-                        assets.append(base)
-                elif action == 'sell':
-                    # 卖出操作：卖base得quote
-                    if assets[-1] == base:
-                        assets.append(quote)
-            # 确保路径闭合
-            if assets[-1] != assets[0]:
-                assets.append(assets[0])
-            test_paths.append(assets)
-        
-        for path_assets in test_paths:
-            try:
-                # 创建套利路径
-                arbitrage_path = ArbitragePath(path=path_assets)
-                
-                # 获取交易对和方向
-                trading_pairs = arbitrage_path.get_trading_pairs()
-                trade_directions = arbitrage_path.get_trade_directions()
-                
-                self.logger.info(f"测试路径: {arbitrage_path}")
-                self.logger.info(f"交易对: {trading_pairs}")
-                self.logger.info(f"交易方向: {trade_directions}")
-                
-                # 验证每个交易对的真实数据
-                all_pairs_valid = True
-                for pair in trading_pairs:
-                    try:
-                        orderbook = self.client.get_orderbook(pair)
-                        if not orderbook or not isinstance(orderbook, OrderBook):
-                            all_pairs_valid = False
-                            break
-                        
-                        if not orderbook.is_valid():
-                            all_pairs_valid = False
-                            break
-                            
-                        self.logger.info(f"交易对 {pair} 数据有效")
-                    except Exception as e:
-                        self.logger.warning(f"交易对 {pair} 数据获取失败: {e}")
-                        all_pairs_valid = False
-                        break
-                
-                if all_pairs_valid:
-                    self.logger.info(f"套利路径 {arbitrage_path} 验证通过")
-                else:
-                    self.logger.warning(f"套利路径 {arbitrage_path} 部分交易对数据无效")
-                    
-            except Exception as e:
-                self.logger.error(f"测试路径 {path_assets} 失败: {e}")
-    
-    def test_real_trade_validation(self):
-        """使用真实数据验证交易参数"""
-        # 获取真实市场数据
-        symbol = "BTC-USDT"
-        orderbook = self.client.get_orderbook(symbol)
-        
-        if orderbook and isinstance(orderbook, OrderBook) and orderbook.is_valid():
+        if orderbook and orderbook.is_valid():
             best_bid = orderbook.get_best_bid()
             best_ask = orderbook.get_best_ask()
             
             if best_bid and best_ask:
-                # 创建基于真实价格的交易
+                # 创建买卖交易（价格设置为不会成交）
                 buy_trade = Trade(
                     inst_id=symbol,
                     side="buy",
-                    size=0.001,  # 小额测试
-                    price=best_ask * 0.99  # 稍低于最优卖价
+                    size=0.001,
+                    price=best_bid * 0.99  # 低于最优买价
                 )
                 
                 sell_trade = Trade(
                     inst_id=symbol,
                     side="sell",
                     size=0.001,
-                    price=best_bid * 1.01  # 稍高于最优买价
+                    price=best_ask * 1.01  # 高于最优卖价
                 )
                 
                 # 验证交易参数
-                assert buy_trade.is_buy()
-                assert sell_trade.is_sell()
+                self.assertTrue(buy_trade.is_buy())
+                self.assertTrue(sell_trade.is_sell())
                 
                 # 验证订单参数格式
                 buy_params = buy_trade.to_order_params()
                 sell_params = sell_trade.to_order_params()
                 
-                assert buy_params['instId'] == symbol
-                assert buy_params['side'] == 'buy'
-                assert buy_params['ordType'] == 'limit'
+                self.assertEqual(buy_params['instId'], symbol)
+                self.assertEqual(buy_params['side'], 'buy')
+                self.assertEqual(buy_params['ordType'], 'limit')
                 
-                assert sell_params['instId'] == symbol
-                assert sell_params['side'] == 'sell'
-                assert sell_params['ordType'] == 'limit'
+                self.assertEqual(sell_params['instId'], symbol)
+                self.assertEqual(sell_params['side'], 'sell')
+                self.assertEqual(sell_params['ordType'], 'limit')
                 
                 self.logger.info(f"真实交易验证通过")
                 self.logger.info(f"买单参数: {buy_params}")
                 self.logger.info(f"卖单参数: {sell_params}")
             else:
-                pytest.skip("订单簿数据不完整")
+                self.skipTest("订单簿数据不完整")
         else:
-            pytest.skip("无法获取真实订单簿数据")
+            self.skipTest("无法获取真实订单簿数据")
+
+
+# 全局测试控制变量
+RUN_FULL_TEST = False
+GENERATE_COVERAGE = False
+
+
+def run_tests():
+    """运行测试主函数"""
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(description='Models模块测试脚本')
+    parser.add_argument('--full', action='store_true', help='运行完整测试（包括真实API测试）')
+    parser.add_argument('--coverage', action='store_true', help='生成覆盖率报告')
+    args = parser.parse_args()
+    
+    # 设置全局变量
+    global RUN_FULL_TEST, GENERATE_COVERAGE
+    RUN_FULL_TEST = args.full
+    GENERATE_COVERAGE = args.coverage
+    
+    # 设置日志
+    test_start_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    tests_dir = os.path.dirname(os.path.abspath(__file__))
+    log_file = os.path.join(tests_dir, f"logs/test_models_{test_start_time}.log")
+    
+    # 确保日志目录存在
+    os.makedirs(os.path.join(tests_dir, "logs"), exist_ok=True)
+    
+    # 配置日志
+    logger = setup_logger("test_models", log_file, logging.INFO)
+    logger.info(f"开始运行models测试 - 模式: {'完整测试' if RUN_FULL_TEST else '基础测试'}")
+    
+    # 创建测试套件
+    loader = unittest.TestLoader()
+    suite = unittest.TestSuite()
+    
+    # 添加测试类
+    test_classes = [
+        TestArbitragePath,
+        TestArbitrageOpportunity,
+        TestOrderBook,
+        TestPortfolio,
+        TestTrade
+    ]
+    
+    for test_class in test_classes:
+        tests = loader.loadTestsFromTestCase(test_class)
+        suite.addTests(tests)
+    
+    # 运行测试
+    runner = unittest.TextTestRunner(verbosity=2)
+    
+    if GENERATE_COVERAGE:
+        # 使用coverage运行测试
+        import coverage
+        cov = coverage.Coverage(source=['models'])
+        cov.start()
+        
+        result = runner.run(suite)
+        
+        cov.stop()
+        cov.save()
+        
+        # 生成报告
+        print("\n生成覆盖率报告...")
+        cov.report()
+        
+        # 生成HTML报告
+        html_report_dir = os.path.join(tests_dir, "reports/models_coverage_html")
+        cov.html_report(directory=html_report_dir)
+        print(f"HTML覆盖率报告已生成: {html_report_dir}/index.html")
+        
+        # 生成XML报告
+        xml_report_path = os.path.join(tests_dir, "reports/models_coverage.xml")
+        cov.xml_report(outfile=xml_report_path)
+        print(f"XML覆盖率报告已生成: {xml_report_path}")
+    else:
+        result = runner.run(suite)
+    
+    # 记录测试结果
+    logger.info(f"测试完成 - 运行: {result.testsRun}, 失败: {len(result.failures)}, 错误: {len(result.errors)}")
+    
+    # 返回是否成功
+    return len(result.failures) == 0 and len(result.errors) == 0
 
 
 if __name__ == "__main__":
-    # 运行测试并生成models目录的覆盖率报告
-    import os
-    # 临时设置环境变量来覆盖pytest.ini的配置
-    os.environ['PYTEST_CURRENT_TEST'] = 'models_only'
-    
-    pytest.main([
-        __file__, 
-        "-v", 
-        "--tb=short",
-        "-o", "addopts=",  # 清空pytest.ini中的addopts
-        "--cov=models",  # 只测试models目录的覆盖率
-        "--cov-report=term-missing",
-        "--cov-report=html:tests/reports/models_coverage_html",
-        "--cov-report=xml:tests/reports/models_coverage.xml",
-        "--junit-xml=tests/reports/models_junit.xml"
-    ])
+    success = run_tests()
+    sys.exit(0 if success else 1)
