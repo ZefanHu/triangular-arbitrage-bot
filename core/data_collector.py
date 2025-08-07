@@ -112,12 +112,10 @@ class DataCollector:
             
             self.logger.info("正在启动数据采集器...")
             
-            # 设置默认交易对
+            # 设置默认交易对 - 使用实盘支持的BTC-USDT-USDC三角套利对
             if trading_pairs is None:
                 trading_pairs = [
-                    'BTC-USDT', 'ETH-USDT', 'BNB-USDT',
-                    'BTC-USDC', 'ETH-USDC', 'BNB-USDC',
-                    'USDT-USDC'
+                    'BTC-USDT', 'BTC-USDC', 'USDC-USDT'
                 ]
             
             # 启动WebSocket连接

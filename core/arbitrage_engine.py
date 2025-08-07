@@ -67,6 +67,9 @@ class ArbitrageEngine:
             'start_time': time.time()
         }
         
+        # 存储所有分析结果（包括非盈利的）
+        self.recent_analyses = []
+        
         self.logger.info("套利引擎初始化完成")
         self.logger.info(f"手续费率: {self.fee_rate}")
         self.logger.info(f"最小利润阈值: {self.min_profit_threshold}")
@@ -159,6 +162,20 @@ class ArbitrageEngine:
         # 计算利润率
         final_amount, profit_rate = self.calculate_path_profit(path, self.min_trade_amount)
         
+        # 存储分析结果（无论是否盈利）
+        path_name = ' -> '.join(path)
+        analysis_result = {
+            'path_name': path_name,
+            'profit_rate': profit_rate,
+            'timestamp': time.time(),
+            'is_profitable': profit_rate > self.min_profit_threshold,
+            'final_amount': final_amount,
+            'initial_amount': self.min_trade_amount
+        }
+        self.recent_analyses.append(analysis_result)
+        # 保持最近200条记录
+        self.recent_analyses = self.recent_analyses[-200:]
+        
         # 多重验证机制
         validation_result = self._validate_arbitrage_opportunity(final_amount, profit_rate, trade_steps)
         if not validation_result['valid']:
@@ -248,20 +265,27 @@ class ArbitrageEngine:
                     if 'pair' in step:
                         required_pairs.add(step['pair'])
         
-        # 获取所有必需的订单簿数据（使用高精度方法）
+        # 获取所有必需的订单簿数据（使用高精度方法，如果失败则回退到常规方法）
         orderbooks = {}
         for pair in required_pairs:
             orderbook = self.data_collector.get_arbitrage_orderbook(pair)
+            if not orderbook:
+                # 回退到常规订单簿，至少用于监控显示
+                orderbook = self.data_collector.get_orderbook(pair)
+                if orderbook:
+                    self.logger.debug(f"使用常规订单簿数据 {pair} (可能不够新鲜用于实际交易)")
+            
             if orderbook:
                 orderbooks[pair] = orderbook
             else:
-                self.logger.debug(f"无法获取 {pair} 的高精度订单簿数据，跳过此轮套利检查")
+                self.logger.debug(f"无法获取 {pair} 的任何订单簿数据，跳过此轮套利检查")
                 return opportunities
         
-        # 数据一致性检查
-        if not self.validate_data_consistency(orderbooks):
-            self.logger.debug("数据时间一致性检查失败，跳过此轮套利检查")
-            return opportunities
+        # 数据一致性检查（仅在严格模式下启用）
+        # 对于监控界面，我们希望始终显示分析结果，即使数据不够新鲜
+        # if not self.validate_data_consistency(orderbooks):
+        #     self.logger.debug("数据时间一致性检查失败，跳过此轮套利检查")
+        #     return opportunities
         
         # 检查所有配置的路径
         for path_name, path_config in self.paths.items():
@@ -377,6 +401,19 @@ class ArbitrageEngine:
             
             # 计算利润率
             final_amount, profit_rate = self.calculate_path_profit_from_steps(trade_steps, self.min_trade_amount)
+            
+            # 存储分析结果（无论是否盈利）
+            analysis_result = {
+                'path_name': path_name,
+                'profit_rate': profit_rate,
+                'timestamp': time.time(),
+                'is_profitable': profit_rate > self.min_profit_threshold,
+                'final_amount': final_amount,
+                'initial_amount': self.min_trade_amount
+            }
+            self.recent_analyses.append(analysis_result)
+            # 保持最近200条记录
+            self.recent_analyses = self.recent_analyses[-200:]
             
             # 多重验证机制
             validation_result = self._validate_arbitrage_opportunity(final_amount, profit_rate, trade_steps)

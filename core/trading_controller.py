@@ -707,9 +707,9 @@ class TradingController:
                     else:
                         pairs.add(f"{asset1}-{asset2}")
         
-        # 添加默认交易对
+        # 添加默认交易对 - 使用OKX实际支持的交易对
         default_pairs = [
-            'BTC-USDT', 'ETH-USDT', 'BTC-USDC', 'ETH-USDC', 'USDT-USDC'
+            'BTC-USDT', 'ETH-USDT', 'ETH-BTC', 'USDC-USDT'
         ]
         for pair in default_pairs:
             pairs.add(pair)
