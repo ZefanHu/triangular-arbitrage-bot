@@ -34,6 +34,9 @@ class DataCollector:
         # 初始化WebSocket管理器
         self.ws_manager = WebSocketManager()
         
+        # 余额更新回调（将在TradeExecutor中设置）
+        self.balance_update_callback = None
+        
         # 运行状态
         self.is_running = False
         
@@ -95,6 +98,18 @@ class DataCollector:
         
         self.logger.info("数据采集器初始化完成")
     
+    def set_balance_update_callback(self, callback: Callable):
+        """设置余额更新回调函数
+        
+        Args:
+            callback: 回调函数，接收参数 (balances: Dict[str, float])
+        """
+        self.balance_update_callback = callback
+        # 如果WebSocket已连接，立即设置回调
+        if self.ws_manager and self.is_running:
+            self.ws_manager.set_balance_update_callback(callback)
+        self.logger.info("已设置余额更新回调函数")
+    
     async def start(self, trading_pairs: List[str] = None) -> bool:
         """
         启动数据采集
@@ -133,6 +148,10 @@ class DataCollector:
             
             # 添加数据更新回调
             self.ws_manager.add_data_callback(self._on_data_update)
+            
+            # 设置WebSocket余额更新回调
+            if self.balance_update_callback:
+                self.ws_manager.set_balance_update_callback(self.balance_update_callback)
             
             # 启动定期同步任务
             self.sync_task = asyncio.create_task(self._balance_sync_loop())

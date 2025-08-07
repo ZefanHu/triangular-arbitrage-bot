@@ -88,6 +88,9 @@ class TradingController:
         self.trade_executor = TradeExecutor(self.data_collector.rest_client)
         self.risk_manager = RiskManager(self.config_manager, self.data_collector.rest_client)
         
+        # 设置余额更新回调，连WebSocket到BalanceCache
+        self.data_collector.set_balance_update_callback(self.trade_executor.balance_cache.update_from_websocket)
+        
         # 交易日志记录器
         self.trade_logger = TradeLogger(enable_file_logging=True) if enable_rich_logging else None
         

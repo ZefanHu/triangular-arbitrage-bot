@@ -69,34 +69,55 @@ class BalanceCache:
     """
     余额缓存管理器
     
-    维护本地余额缓存，减少API调用次数
+    维护本地余额缓存，结合WebSocket实时更新和REST API
     """
     
     def __init__(self, okx_client: OKXClient):
         self.okx_client = okx_client
         self.cache: Dict[str, float] = {}
         self.last_update: float = 0
-        self.cache_ttl: float = 30.0  # 缓存有效期30秒
+        self.cache_ttl: float = 30.0  # 延长缓存有效期，因为有WebSocket实时更新
         self.lock = threading.Lock()
         self.logger = logging.getLogger(__name__)
+        self.websocket_connected = False
     
     def get_balance(self, force_refresh: bool = False) -> Dict[str, float]:
-        """获取余额，优先使用缓存"""
+        """获取余额，优先使用WebSocket实时数据"""
         with self.lock:
             current_time = time.time()
             
-            # 检查是否需要刷新缓存
-            if force_refresh or current_time - self.last_update > self.cache_ttl:
-                self.logger.debug("刷新余额缓存")
+            # 如果WebSocket未连接或强制刷新或缓存过期，则使用REST API
+            if force_refresh or not self.websocket_connected or (current_time - self.last_update > self.cache_ttl):
+                self.logger.debug("使用REST API刷新余额缓存")
                 balance = self.okx_client.get_balance()
                 if balance:
                     self.cache = balance
                     self.last_update = current_time
-                    self.logger.debug(f"余额缓存已更新: {self.cache}")
+                    self.logger.debug(f"REST API余额缓存已更新: {self.cache}")
                 else:
-                    self.logger.warning("获取余额失败，使用旧缓存")
+                    self.logger.warning("REST API获取余额失败，使用旧缓存")
             
             return self.cache.copy()
+    
+    def update_from_websocket(self, balances: Dict[str, float]):
+        """从WebSocket更新余额缓存
+        
+        Args:
+            balances: WebSocket推送的余额数据
+        """
+        with self.lock:
+            self.cache = balances
+            self.last_update = time.time()
+            self.websocket_connected = True
+            self.logger.debug(f"WebSocket余额更新: {self.cache}")
+    
+    def set_websocket_connected(self, connected: bool):
+        """设置WebSocket连接状态
+        
+        Args:
+            connected: WebSocket是否已连接
+        """
+        self.websocket_connected = connected
     
     def update_balance(self, asset: str, amount: float):
         """更新本地余额缓存"""

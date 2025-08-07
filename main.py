@@ -71,11 +71,11 @@ class TradingBot:
         self._prev_prices_hash = None
         self._prev_stats_hash = None
         
-        # Update intervals (in seconds)
+        # Update intervals (in seconds) - optimized for performance and real-time data
         self.HEADER_UPDATE_INTERVAL = 1.0  # Header updates every 1 second
         self.ANALYSES_UPDATE_INTERVAL = 0.5  # Analyses update every 500ms
-        self.PRICES_UPDATE_INTERVAL = 0.2  # Prices update every 200ms
-        self.STATISTICS_UPDATE_INTERVAL = 1.0  # Stats update every 1 second
+        self.PRICES_UPDATE_INTERVAL = 0.5  # Prices update every 500ms (reduced from 200ms to reduce load)
+        self.STATISTICS_UPDATE_INTERVAL = 2.0  # Stats update every 2 seconds (balance API calls)
         self.FOOTER_UPDATE_INTERVAL = 1.0  # Footer updates every 1 second
         
         # Set up signal handlers
@@ -375,11 +375,11 @@ class TradingBot:
             if hasattr(self.trading_controller, 'arbitrage_engine') and self.trading_controller.arbitrage_engine:
                 analyses = getattr(self.trading_controller.arbitrage_engine, 'recent_analyses', [])
                 
-                # Sort by profit rate (highest first)
-                sorted_analyses = sorted(analyses, key=lambda x: x.get('profit_rate', 0), reverse=True)
+                # Sort by timestamp (most recent first) for consistent ordering
+                sorted_analyses = sorted(analyses, key=lambda x: x.get('timestamp', 0), reverse=True)
                 
                 # Show last 15 analyses with color coding
-                for analysis in sorted_analyses[-15:]:
+                for analysis in sorted_analyses[:15]:  # Changed to first 15 (most recent)
                     path = analysis.get('path_name', 'Unknown')
                     profit_rate = analysis.get('profit_rate', 0)
                     profit_pct = profit_rate * 100  # Convert to percentage
@@ -607,20 +607,57 @@ class TradingBot:
             risk_table.add_row("Risk Level", f"[{risk_color}]{risk_level}[/{risk_color}]")
             risk_table.add_row("Rejected", str(risk_stats.get('rejected_opportunities', 0)))
             
-            # Balance summary
+            # Balance summary - fetch real-time balance from OKX API
             balance_table = Table(title="💰 Account Balance", box=box.SIMPLE)
             balance_table.add_column("Asset", style="cyan")
             balance_table.add_column("Amount", style="white", justify="right")
             
+            total_profit_usdt = 0.0  # For calculating total profit
+            # Get initial values from config (trading section)
+            initial_usdt = float(self.config_manager.get('trading', 'initial_usdt', default=0) or 0)
+            initial_usdc = float(self.config_manager.get('trading', 'initial_usdc', default=0) or 0)
+            initial_btc = float(self.config_manager.get('trading', 'initial_btc', default=0) or 0)
+            
             if self.trading_controller.trade_executor:
-                balances = self.trading_controller.trade_executor.balance_cache.get_balance()
+                # Refresh balance every 2 seconds to balance real-time data with API limits
+                # Since STATISTICS_UPDATE_INTERVAL is 2 seconds, this will refresh appropriately
+                balances = self.trading_controller.trade_executor.balance_cache.get_balance(force_refresh=False)
                 usdt_balance = balances.get("USDT", 0)
                 usdc_balance = balances.get("USDC", 0)
                 btc_balance = balances.get("BTC", 0)
                 
-                balance_table.add_row("USDT", f"{usdt_balance:,.2f}")
-                balance_table.add_row("USDC", f"{usdc_balance:,.2f}")
-                balance_table.add_row("BTC", f"{btc_balance:.6f}")
+                # Display with proper precision matching OKX API
+                # USDT & USDC: 5 decimal places (stablecoins), BTC: 8 decimal places
+                balance_table.add_row("USDT", f"{usdt_balance:.5f}")
+                balance_table.add_row("USDC", f"{usdc_balance:.5f}")  # Same precision as USDT
+                balance_table.add_row("BTC", f"{btc_balance:.8f}")
+                
+                # Calculate total profit based on USDT change only
+                # In triangular arbitrage, we start and end with USDT
+                # Other currencies should remain relatively stable
+                total_profit_usdt = usdt_balance - initial_usdt
+                
+                # Always show Total Profit, even if 0
+                balance_table.add_row("", "")  # Separator
+                profit_color = "bright_green" if total_profit_usdt > 0.00001 else "red" if total_profit_usdt < -0.00001 else "white"
+                balance_table.add_row("Total Profit", f"[{profit_color}]{total_profit_usdt:+.5f} USDT[/{profit_color}]")
+                
+                # Optionally show other currency changes for monitoring (should be minimal in triangular arbitrage)
+                profit_usdc = usdc_balance - initial_usdc
+                profit_btc = btc_balance - initial_btc
+                
+                # Only show details if there are significant deviations (which might indicate issues)
+                if abs(profit_usdc) > 0.1 or abs(profit_btc) > 0.00001:
+                    balance_table.add_row("", "")
+                    balance_table.add_row("[dim]Deviations:[/dim]", "")
+                    
+                    if abs(profit_usdc) > 0.1:
+                        deviation_color = "yellow" if abs(profit_usdc) < 1 else "red"
+                        balance_table.add_row("  USDC", f"[{deviation_color}]{profit_usdc:+.5f}[/{deviation_color}]")
+                    
+                    if abs(profit_btc) > 0.00001:
+                        deviation_color = "yellow" if abs(profit_btc) < 0.0001 else "red"
+                        balance_table.add_row("  BTC", f"[{deviation_color}]{profit_btc:+.8f}[/{deviation_color}]")
             
             # Combine all tables
             combined = Table.grid(padding=1)
@@ -629,8 +666,8 @@ class TradingBot:
             combined.add_row(risk_table)
             combined.add_row(balance_table)
         
-            # Dynamic border color based on performance
-            border_color = "green" if net_profit > 0 else "yellow" if net_profit == 0 else "red"
+            # Dynamic border color based on total profit
+            border_color = "green" if total_profit_usdt > 0 else "yellow" if total_profit_usdt == 0 else "red"
             self._cached_statistics = Panel(combined, title="📈 Performance", border_style=border_color)
             layout.update(self._cached_statistics)
         except Exception as e:

@@ -4,6 +4,8 @@ import json
 import logging
 import time
 import zlib
+import hmac
+import base64
 from typing import Dict, Any, List, Optional, Callable
 from config.config_manager import ConfigManager
 
@@ -192,6 +194,10 @@ class WebSocketManager:
             self.public_url = "wss://ws.okx.com:8443/ws/v5/public"
             self.private_url = "wss://ws.okx.com:8443/ws/v5/private"
         
+        # Private channel subscription state
+        self.private_subscribed = False
+        self.balance_update_callback = None  # Callback for balance updates
+        
         # 连接状态
         self.ws_public = None
         self.ws_private = None
@@ -209,6 +215,7 @@ class WebSocketManager:
         
         # 异步任务管理
         self.message_loop_task = None
+        self.private_message_loop_task = None
         
         self.logger.info(f"WebSocket管理器初始化完成，使用{'模拟盘' if self.flag == '1' else '实盘'}")
     
@@ -231,6 +238,9 @@ class WebSocketManager:
             # 启动消息处理任务
             self.message_loop_task = asyncio.create_task(self._start_message_loop())
             
+            # 连接私有频道（用于账户余额）
+            await self._connect_private_channel()
+            
             return True
             
         except Exception as e:
@@ -247,6 +257,7 @@ class WebSocketManager:
         """
         try:
             self.is_connected = False
+            self.private_subscribed = False
             
             # 取消消息循环任务
             if self.message_loop_task and not self.message_loop_task.done():
@@ -259,6 +270,18 @@ class WebSocketManager:
                     self.logger.warning(f"取消消息循环任务时出错: {e}")
                 finally:
                     self.message_loop_task = None
+            
+            # 取消私有频道消息循环任务
+            if self.private_message_loop_task and not self.private_message_loop_task.done():
+                self.private_message_loop_task.cancel()
+                try:
+                    await self.private_message_loop_task
+                except asyncio.CancelledError:
+                    self.logger.debug("私有频道消息循环任务已取消")
+                except Exception as e:
+                    self.logger.warning(f"取消私有频道消息循环任务时出错: {e}")
+                finally:
+                    self.private_message_loop_task = None
             
             if self.ws_public:
                 await self.ws_public.close()
@@ -622,3 +645,270 @@ class WebSocketManager:
                     callback(inst_id, action, bids, asks, server_timestamp)
             except Exception as e:
                 self.logger.error(f"数据更新回调函数执行失败: {e}")
+    
+    def _generate_login_params(self) -> str:
+        """
+        生成登录参数（用于私有频道认证）
+        
+        Returns:
+            JSON格式的登录参数字符串
+        """
+        timestamp = str(int(time.time()))
+        message = timestamp + 'GET' + '/users/self/verify'
+        
+        # 生成签名
+        mac = hmac.new(
+            bytes(self.secret_key, encoding='utf8'),
+            bytes(message, encoding='utf-8'),
+            digestmod='sha256'
+        )
+        signature = base64.b64encode(mac.digest()).decode('utf-8')
+        
+        # 构建登录参数
+        login_param = {
+            "op": "login",
+            "args": [{
+                "apiKey": self.api_key,
+                "passphrase": self.passphrase,
+                "timestamp": timestamp,
+                "sign": signature
+            }]
+        }
+        
+        return json.dumps(login_param)
+    
+    async def _connect_private_channel(self) -> bool:
+        """
+        连接私有频道并订阅账户余额
+        
+        Returns:
+            连接是否成功
+        """
+        try:
+            self.logger.info(f"正在连接私有频道WebSocket: {self.private_url}")
+            
+            # 连接私有频道
+            self.ws_private = await websockets.connect(self.private_url)
+            
+            # 发送登录认证
+            login_str = self._generate_login_params()
+            await self.ws_private.send(login_str)
+            self.logger.debug("发送私有频道登录认证")
+            
+            # 等待登录响应
+            login_response = await self.ws_private.recv()
+            response_data = json.loads(login_response)
+            
+            if response_data.get('event') == 'login' and response_data.get('code') == '0':
+                self.logger.info("私有频道登录成功")
+                
+                # 订阅账户余额频道
+                await self._subscribe_account_channel()
+                
+                # 启动私有频道消息处理任务
+                self.private_message_loop_task = asyncio.create_task(self._start_private_message_loop())
+                
+                return True
+            else:
+                self.logger.error(f"私有频道登录失败: {response_data}")
+                if self.ws_private:
+                    await self.ws_private.close()
+                    self.ws_private = None
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"连接私有频道失败: {e}")
+            if self.ws_private:
+                await self.ws_private.close()
+                self.ws_private = None
+            return False
+    
+    async def _subscribe_account_channel(self) -> bool:
+        """
+        订阅账户余额频道
+        
+        Returns:
+            订阅是否成功
+        """
+        try:
+            if not self.ws_private:
+                self.logger.error("私有频道未连接，无法订阅账户余额")
+                return False
+            
+            # 构建订阅参数
+            # OKX账户频道不需要ccy参数，会推送所有币种的余额
+            sub_param = {
+                "op": "subscribe",
+                "args": [{
+                    "channel": "account"
+                }]
+            }
+            
+            sub_str = json.dumps(sub_param)
+            await self.ws_private.send(sub_str)
+            self.logger.info(f"发送账户余额订阅请求: {sub_str}")
+            
+            self.private_subscribed = True
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"订阅账户余额失败: {e}")
+            return False
+    
+    async def _start_private_message_loop(self):
+        """
+        启动私有频道消息处理循环
+        """
+        try:
+            while self.is_connected and self.ws_private:
+                try:
+                    # 接收消息，超时时间25秒
+                    try:
+                        message = await asyncio.wait_for(self.ws_private.recv(), timeout=25)
+                        await self._handle_private_message(message)
+                    except asyncio.TimeoutError:
+                        # 超时时发送ping保持连接
+                        try:
+                            await self.ws_private.send('ping')
+                            pong_message = await self.ws_private.recv()
+                            self.logger.debug(f"私有频道收到pong: {pong_message}")
+                            continue
+                        except Exception as ping_error:
+                            self.logger.error(f"私有频道ping失败: {ping_error}")
+                            break
+                    except websockets.exceptions.ConnectionClosed:
+                        self.logger.warning("私有频道WebSocket连接关闭，正在重连...")
+                        await self._reconnect_private_channel()
+                        break
+                        
+                except Exception as e:
+                    self.logger.error(f"私有频道消息循环中发生错误: {e}")
+                    await self._reconnect_private_channel()
+                    break
+        except asyncio.CancelledError:
+            self.logger.debug("私有频道消息循环任务被取消")
+            raise
+        except Exception as e:
+            self.logger.error(f"私有频道消息循环异常: {e}")
+        finally:
+            self.logger.debug("私有频道消息循环任务结束")
+    
+    async def _handle_private_message(self, message: str):
+        """
+        处理私有频道消息（主要是账户余额更新）
+        
+        Args:
+            message: WebSocket消息
+        """
+        try:
+            # 跳过ping/pong消息
+            if message == 'pong':
+                return
+            
+            self.logger.debug(f"收到私有频道消息: {message}")
+            
+            # 解析JSON消息
+            try:
+                data = json.loads(message)
+            except json.JSONDecodeError:
+                self.logger.warning(f"无法解析私有频道JSON消息: {message}")
+                return
+            
+            # 处理事件消息
+            if 'event' in data:
+                if data['event'] == 'subscribe':
+                    self.logger.info(f"私有频道订阅成功: {data.get('arg', {})}")
+                elif data['event'] == 'error':
+                    self.logger.error(f"私有频道错误: {data}")
+                return
+            
+            # 处理账户余额数据
+            if 'data' in data and 'arg' in data:
+                arg = data.get('arg', {})
+                channel = arg.get('channel', '')
+                
+                if channel == 'account':
+                    await self._process_account_data(data)
+                    
+        except Exception as e:
+            self.logger.error(f"处理私有频道消息时发生错误: {e}")
+    
+    async def _process_account_data(self, data: Dict[str, Any]):
+        """
+        处理账户余额数据
+        
+        Args:
+            data: 账户数据
+        """
+        try:
+            account_data = data.get('data', [])
+            if not account_data:
+                return
+            
+            # 解析余额信息
+            balances = {}
+            for item in account_data:
+                details = item.get('details', [])
+                for detail in details:
+                    currency = detail.get('ccy', '').upper()
+                    # 使用availBal（可用余额）
+                    available = float(detail.get('availBal', 0))
+                    if currency in ['USDT', 'USDC', 'BTC']:
+                        balances[currency] = available
+            
+            # 确保包含所有需要的币种
+            for currency in ['USDT', 'USDC', 'BTC']:
+                if currency not in balances:
+                    balances[currency] = 0.0
+            
+            self.logger.info(f"收到账户余额更新: {balances}")
+            
+            # 调用余额更新回调
+            if self.balance_update_callback:
+                try:
+                    if asyncio.iscoroutinefunction(self.balance_update_callback):
+                        await self.balance_update_callback(balances)
+                    else:
+                        self.balance_update_callback(balances)
+                except Exception as e:
+                    self.logger.error(f"余额更新回调执行失败: {e}")
+                    
+        except Exception as e:
+            self.logger.error(f"处理账户余额数据时发生错误: {e}")
+    
+    async def _reconnect_private_channel(self):
+        """
+        重新连接私有频道
+        """
+        try:
+            self.logger.info("私有频道连接断开，正在重连...")
+            
+            # 先关闭现有连接
+            if self.ws_private:
+                try:
+                    await self.ws_private.close()
+                except:
+                    pass
+                self.ws_private = None
+            
+            # 等待一段时间后重连
+            await asyncio.sleep(2)
+            
+            # 重新连接
+            if await self._connect_private_channel():
+                self.logger.info("私有频道重连成功")
+            else:
+                self.logger.error("私有频道重连失败")
+                
+        except Exception as e:
+            self.logger.error(f"私有频道重连时发生错误: {e}")
+    
+    def set_balance_update_callback(self, callback: Callable):
+        """
+        设置余额更新回调函数
+        
+        Args:
+            callback: 回调函数，接收参数 (balances: Dict[str, float])
+        """
+        self.balance_update_callback = callback
+        self.logger.info(f"设置余额更新回调函数: {callback.__name__ if hasattr(callback, '__name__') else 'anonymous'}")
