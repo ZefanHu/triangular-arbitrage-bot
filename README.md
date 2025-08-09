@@ -168,47 +168,123 @@ passphrase = your_passphrase_here
 flag = 1
 ```
 
-### 2. 主要配置参数 (config/settings.ini)
+### 2. 配置文件详细说明
 
-### 📊 智能交易配置 (config/settings.ini)
+### 📊 主配置文件 (config/settings.ini)
 
 **🛤️ 套利路径配置** - 支持JSON格式精确定义
 ```ini
 [trading]
-# 高级路径配置 - JSON格式，支持精确的交易对和操作定义
-path1 = {"route": "USDT->BTC->USDC->USDT", "steps": [{"pair": "BTC-USDT", "action": "buy"}, {"pair": "BTC-USDC", "action": "sell"}, {"pair": "USDT-USDC", "action": "buy"}]}
+# 预设套利路径 - JSON格式定义（单行）
+# 每个路径包含：route（路径描述）和 steps（具体交易步骤）
+path1 = {"route": "USDT->BTC->USDC->USDT", "steps": [{"pair": "BTC-USDT", "action": "buy"}, {"pair": "BTC-USDC", "action": "sell"}, {"pair": "USDC-USDT", "action": "sell"}]}
+path2 = {"route": "USDT->USDC->BTC->USDT", "steps": [{"pair": "USDC-USDT", "action": "buy"}, {"pair": "BTC-USDC", "action": "buy"}, {"pair": "BTC-USDT", "action": "sell"}]}
 
-path2 = {"route": "USDT->USDC->BTC->USDT", "steps": [{"pair": "USDT-USDC", "action": "buy"}, {"pair": "BTC-USDC", "action": "buy"}, {"pair": "BTC-USDT", "action": "sell"}]}
+# 初始持有量配置（根据实际账户资金设置）
+initial_usdt = 40.54317        # USDT初始数量
+initial_usdc = 30.0            # USDC初始数量
+initial_btc = 0.0002997        # BTC初始数量
 
-# 交易核心参数
-min_profit_threshold = 0.003    # 最小利润阈值 (0.3%)
-min_trade_amount = 100.0        # 最小交易金额
-monitor_interval = 1.0          # 监控间隔 (秒)
-fee_rate = 0.001               # 交易手续费率
-slippage_tolerance = 0.002     # 滑点容忍度
+# 再平衡阈值（偏差百分比）
+rebalance_threshold = 5.0      # 触发再平衡的偏差阈值
+
+# 交易手续费配置（支持差异化费率）
+fee_rate = 0.001               # 默认手续费率（兜底配置）
+
+# 按交易对的差异化手续费配置（根据OKX实际费率设置）
+fee_rate_usdc_usdt = 0.0       # USDC-USDT免手续费
+fee_rate_btc_usdt = 0.001      # BTC-USDT标准手续费
+fee_rate_btc_usdc = 0.001      # BTC-USDC标准手续费
+
+# 交易执行参数
+slippage_tolerance = 0.002     # 滑点容忍度 (0.2%)
+min_profit_threshold = 0.003   # 最小利润阈值 (0.3%)
+order_timeout = 3.0            # 订单超时时间（秒）
+min_trade_amount = 10.0        # 最小交易金额（美元）
+monitor_interval = 1.0         # 监控间隔（秒）
+price_adjustment = 0.001       # 价格调整幅度
+
+# 套利合理性验证（可选）
+enable_profit_validation = false         # 是否启用利润验证
+max_profit_rate_threshold = 0.01        # 最大合理利润率
+max_simulated_profit_rate = 0.005       # 模拟最大利润率
+max_price_spread = 0.02                 # 最大价差阈值
+max_stablecoin_spread = 0.005           # 稳定币最大价差
+stablecoin_price_range_min = 0.98       # 稳定币价格下限
+stablecoin_price_range_max = 1.02       # 稳定币价格上限
 ```
 
-**🛡️ 多层风险管理配置**
+**🛡️ 风险管理配置**
 ```ini
 [risk]
-max_position_ratio = 0.2        # 最大仓位比例 (20%总资产)
-max_single_trade_ratio = 0.1    # 单笔最大交易比例 (10%总资产)
-min_arbitrage_interval = 10     # 套利最小间隔 (秒)
-max_daily_trades = 100          # 单日最大交易次数
+# 仓位控制参数
+max_position_ratio = 0.3        # 最大仓位比例 (30%总资产)
+max_single_trade_ratio = 0.15   # 单笔最大交易比例 (15%总资产)
+
+# 交易频率控制
+min_arbitrage_interval = 10     # 套利最小间隔（秒）
+max_daily_trades = 50           # 单日最大交易次数
+
+# 损失控制参数
 max_daily_loss_ratio = 0.05     # 单日最大损失比例 (5%)
 stop_loss_ratio = 0.1           # 强制停止损失阈值 (10%)
+
+# 系统检查参数
+balance_check_interval = 60     # 余额检查间隔（秒）
+
+# 网络重试配置
 network_retry_count = 3         # 网络重试次数
+network_retry_delay = 1.0       # 重试延迟（秒）
 ```
 
-**⚙️ 系统性能配置**
+**⚙️ 系统配置**
 ```ini
 [system]
-log_level = INFO                        # 日志级别
-log_file = logs/trading.log            # 日志文件
-enable_performance_monitoring = true   # 性能监控
-enable_trade_history = true           # 交易历史记录
-performance_log_interval = 300        # 性能日志间隔(秒)
+# 日志配置
+log_level = INFO                # 日志级别 (DEBUG/INFO/WARNING/ERROR)
+log_file = logs/trading.log     # 日志文件路径
+
+# 数据存储配置
+enable_trade_history = true                    # 是否记录交易历史
+trade_history_file = logs/trade_history.json   # 交易历史文件路径
 ```
+
+### 🔐 API密钥配置 (config/secrets.ini)
+
+**重要提示**：此文件包含敏感信息，不应提交到版本控制系统
+
+```ini
+[api]
+# OKX API密钥配置
+api_key = your_api_key_here        # API Key（从OKX获取）
+secret_key = your_secret_key_here  # Secret Key（从OKX获取）
+passphrase = your_passphrase_here  # Passphrase（创建API时设置）
+
+# 交易环境选择
+flag = 1                           # 0=实盘, 1=模拟盘（强烈建议先使用模拟盘）
+```
+
+### 📝 配置最佳实践
+
+1. **手续费配置优化**
+   - 系统支持按交易对配置不同的手续费率
+   - OKX对某些稳定币交易对（如USDC-USDT）提供零手续费
+   - 正确配置可显著提高套利收益（可节省约33%的手续费成本）
+
+2. **风险参数调整建议**
+   - **小额账户**（<$1000）：可适当提高仓位比例至30-40%
+   - **大额账户**（>$10000）：建议保持保守的10-20%仓位
+   - **初次使用**：建议使用最小交易金额测试
+
+3. **路径配置说明**
+   - 每个路径必须形成闭环（起点和终点相同）
+   - steps中的action只有两种：buy（买入）和sell（卖出）
+   - pair格式必须与OKX交易对格式一致（如BTC-USDT）
+
+4. **性能优化建议**
+   - `monitor_interval`：网络好时可设为0.5-1秒，网络差时设为2-3秒
+   - `order_timeout`：根据网络延迟调整，通常3-5秒较合适
+   - `balance_check_interval`：频繁交易时可设为30秒，否则60秒即可
 
 ## 🧪 测试与验证
 
