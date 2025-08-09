@@ -71,7 +71,7 @@ class ArbitrageEngine:
         self.recent_analyses = []
         
         self.logger.info("套利引擎初始化完成")
-        self.logger.info(f"手续费率: {self.fee_rate}")
+        self.logger.info(f"默认手续费率: {self.fee_rate}")
         self.logger.info(f"最小利润阈值: {self.min_profit_threshold}")
         self.logger.info(f"最小交易金额: {self.min_trade_amount}")
         self.logger.info(f"监控间隔: {self.monitor_interval}秒")
@@ -537,6 +537,9 @@ class ArbitrageEngine:
             action = step['action']
             order_book = step['order_book']
             
+            # 获取该交易对的特定手续费率
+            pair_fee_rate = self.config_manager.get_trading_pair_fee(pair)
+            
             # 根据action选择价格
             if action == 'buy':
                 # 买入时使用卖一价（asks）
@@ -551,8 +554,8 @@ class ArbitrageEngine:
                     return 0, -1
                 # 买入计算：current_amount / price（获得多少目标资产）
                 prev_amount = current_amount
-                current_amount = (current_amount / price) * (1 - self.fee_rate)
-                self.logger.debug(f"步骤{i+1}: {pair} {action} @ {price}, {prev_amount:.6f} -> {current_amount:.6f} (手续费:{self.fee_rate:.3%})")
+                current_amount = (current_amount / price) * (1 - pair_fee_rate)
+                self.logger.debug(f"步骤{i+1}: {pair} {action} @ {price}, {prev_amount:.6f} -> {current_amount:.6f} (手续费:{pair_fee_rate:.3%})")
             else:  # sell
                 # 卖出时使用买一价（bids）
                 if hasattr(order_book, 'bids') and order_book.bids:
@@ -566,8 +569,8 @@ class ArbitrageEngine:
                     return 0, -1
                 # 卖出计算：current_amount * price（获得多少计价资产）
                 prev_amount = current_amount
-                current_amount = (current_amount * price) * (1 - self.fee_rate)
-                self.logger.debug(f"步骤{i+1}: {pair} {action} @ {price}, {prev_amount:.6f} -> {current_amount:.6f} (手续费:{self.fee_rate:.3%})")
+                current_amount = (current_amount * price) * (1 - pair_fee_rate)
+                self.logger.debug(f"步骤{i+1}: {pair} {action} @ {price}, {prev_amount:.6f} -> {current_amount:.6f} (手续费:{pair_fee_rate:.3%})")
         
         profit_rate = (current_amount - amount) / amount
         self.logger.debug(f"套利计算完成: {amount} -> {current_amount:.6f}, 利润率: {profit_rate:.6%}")
@@ -727,6 +730,9 @@ class ArbitrageEngine:
                     self.logger.error(f"无法获取 {pair} 订单簿")
                     return 0.0, -1.0
             
+            # 获取该交易对的特定手续费率
+            pair_fee_rate = self.config_manager.get_trading_pair_fee(pair)
+            
             # 根据方向选择价格
             if direction == 'buy':
                 # 买入时使用卖一价（asks）
@@ -739,7 +745,7 @@ class ArbitrageEngine:
                 if price == 0:
                     return 0, -1
                 # 计算获得的数量（扣除手续费）
-                current_amount = (current_amount / price) * (1 - self.fee_rate)
+                current_amount = (current_amount / price) * (1 - pair_fee_rate)
             else:
                 # 卖出时使用买一价（bids）
                 if hasattr(order_book, 'bids') and order_book.bids:
@@ -751,7 +757,7 @@ class ArbitrageEngine:
                 if price == 0:
                     return 0, -1
                 # 计算获得的数量（扣除手续费）
-                current_amount = (current_amount * price) * (1 - self.fee_rate)
+                current_amount = (current_amount * price) * (1 - pair_fee_rate)
             
             self.logger.debug(f"{from_asset} -> {to_asset}: {direction} @ {price}, amount: {current_amount}")
         

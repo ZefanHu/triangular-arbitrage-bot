@@ -92,6 +92,48 @@ class ConfigManager:
                 "legacy_format": True
             }
     
+    def get_trading_pair_fee(self, pair):
+        """
+        获取特定交易对的手续费率
+        
+        Args:
+            pair: 交易对，如 'BTC-USDT', 'USDC-USDT' 等
+            
+        Returns:
+            float: 该交易对的手续费率
+        """
+        try:
+            # 将交易对转换为配置键格式（小写，替换连字符为下划线）
+            # 例如: 'BTC-USDT' -> 'fee_rate_btc_usdt'
+            normalized_pair = pair.lower().replace('-', '_')
+            fee_key = f'fee_rate_{normalized_pair}'
+            
+            # 尝试获取特定交易对的手续费配置
+            fee_rate_str = self.get('trading', fee_key, None)
+            
+            if fee_rate_str is not None:
+                # 处理可能包含注释的配置值
+                fee_rate_str = fee_rate_str.split('#')[0].strip()
+                fee_rate = float(fee_rate_str)
+                self.logger.debug(f"使用交易对 {pair} 的特定手续费率: {fee_rate}")
+                return fee_rate
+            else:
+                # 使用默认手续费率
+                default_fee_str = self.get('trading', 'fee_rate', '0.001')
+                # 处理可能包含注释的配置值
+                default_fee_str = default_fee_str.split('#')[0].strip()
+                default_fee = float(default_fee_str)
+                self.logger.debug(f"交易对 {pair} 使用默认手续费率: {default_fee}")
+                return default_fee
+                
+        except Exception as e:
+            self.logger.error(f"获取交易对 {pair} 手续费率失败: {e}")
+            # 出错时返回默认值
+            default_fee_str = self.get('trading', 'fee_rate', '0.001')
+            if default_fee_str:
+                default_fee_str = default_fee_str.split('#')[0].strip()
+            return float(default_fee_str) if default_fee_str else 0.001
+    
     def get_trading_config(self):
         try:
             # 解析路径配置
@@ -114,7 +156,7 @@ class ConfigManager:
                 },
                 'parameters': {
                     'rebalance_threshold': float(self.get('trading', 'rebalance_threshold', 5.0)),
-                    'fee_rate': float(self.get('trading', 'fee_rate', 0.001)),
+                    'fee_rate': float(self.get('trading', 'fee_rate', '0.001').split('#')[0].strip()),
                     'slippage_tolerance': float(self.get('trading', 'slippage_tolerance', 0.002)),
                     'min_profit_threshold': float(self.get('trading', 'min_profit_threshold', 0.003)),
                     'order_timeout': float(self.get('trading', 'order_timeout', 3.0)),
@@ -214,9 +256,25 @@ class ConfigManager:
             
             # 验证交易参数
             if self.config.has_section('trading'):
-                fee_rate = float(self.get('trading', 'fee_rate', 0.001))
+                fee_rate_str = self.get('trading', 'fee_rate', '0.001')
+                # 处理可能包含注释的配置值
+                fee_rate_str = fee_rate_str.split('#')[0].strip()
+                fee_rate = float(fee_rate_str)
                 if not (0 <= fee_rate <= 1):
                     errors.append("fee_rate必须在0-1之间")
+                
+                # 验证交易对特定手续费率
+                for key in self.config['trading']:
+                    if key.startswith('fee_rate_') and key != 'fee_rate':
+                        try:
+                            pair_fee_str = self.get('trading', key, '0')
+                            # 处理可能包含注释的配置值
+                            pair_fee_str = pair_fee_str.split('#')[0].strip()
+                            pair_fee = float(pair_fee_str)
+                            if not (0 <= pair_fee <= 1):
+                                errors.append(f"{key}必须在0-1之间")
+                        except ValueError:
+                            errors.append(f"{key}必须是有效的数字")
                 
                 slippage_tolerance = float(self.get('trading', 'slippage_tolerance', 0.002))
                 if not (0 <= slippage_tolerance <= 1):
