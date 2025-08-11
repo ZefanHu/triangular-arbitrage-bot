@@ -213,9 +213,9 @@ class ConfigManager:
         try:
             system_config = {
                 'log_level': self.get('system', 'log_level', 'INFO'),
-                'log_file': self.get('system', 'log_file', 'logs/trading.log'),
+                'system_log_file': self.get('system', 'system_log_file', 'logs/system_runtime.log'),
                 'enable_trade_history': self.get('system', 'enable_trade_history', 'true').lower() == 'true',
-                'trade_history_file': self.get('system', 'trade_history_file', 'logs/trade_history.json')
+                'trade_record_file': self.get('system', 'trade_record_file', 'logs/trade_records.json')
             }
             return system_config
         except Exception as e:

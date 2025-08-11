@@ -76,7 +76,7 @@ class MiscTests:
         arbitrage_engine = ArbitrageEngine(data_collector)
         
         # 启动数据采集
-        trading_pairs = ['BTC-USDT', 'BTC-USDC', 'USDT-USDC']
+        trading_pairs = ['BTC-USDT', 'BTC-USDC', 'USDC-USDT']
         print("🚀 启动数据采集...")
         success = await data_collector.start(trading_pairs)
         
@@ -203,7 +203,7 @@ class MiscTests:
             okx_client = OKXClient()
             print("✅ OKX客户端初始化成功")
             
-            pairs = ['BTC-USDT', 'BTC-USDC', 'USDT-USDC']
+            pairs = ['BTC-USDT', 'BTC-USDC', 'USDC-USDT']
             detailed_data = {}
             
             for pair in pairs:
@@ -316,7 +316,7 @@ class MiscTests:
             # 步骤3: USDC -> USDT
             print("\n📍 [3] USDC → USDT (兑换回USDT)")
             print("-" * 50)
-            usdt_usdc_ask = market_data['USDT-USDC']['best_ask']
+            usdt_usdc_ask = market_data['USDC-USDT']['best_ask']
             final_usdt = (current_amount / usdt_usdc_ask) * (1 - fee_rate)
             
             print(f"  🏷️ 使用价格: {usdt_usdc_ask:.6f} USDC/USDT")
@@ -365,11 +365,11 @@ class MiscTests:
         print("\n🔍 异常原因分析")
         print("=" * 60)
         
-        # USDT-USDC汇率分析
-        usdt_usdc_ask = market_data['USDT-USDC']['best_ask']
+        # USDC-USDT汇率分析
+        usdt_usdc_ask = market_data['USDC-USDT']['best_ask']
         usdt_usdc_rate = 1 / usdt_usdc_ask
         print(f"🔍 关键汇率分析:")
-        print(f"  • USDT-USDC卖价: {usdt_usdc_ask:.6f}")
+        print(f"  • USDC-USDT卖价: {usdt_usdc_ask:.6f}")
         print(f"  • 隐含USDT/USDC汇率: {usdt_usdc_rate:.6f}")
         print(f"  • 正常市场预期: 约1.000 (±0.002)")
         print(f"  • 当前偏差: {(usdt_usdc_rate - 1.0) * 100:+.3f}%")
@@ -439,7 +439,7 @@ class MiscTests:
         
         try:
             okx_client = OKXClient()
-            pairs = ['BTC-USDT', 'BTC-USDC', 'USDT-USDC']
+            pairs = ['BTC-USDT', 'BTC-USDC', 'USDC-USDT']
             market_data = {}
             
             for pair in pairs:
@@ -512,7 +512,7 @@ class MiscTests:
             
             # 步骤3: USDC -> USDT
             print(f"\n📍 步骤3: USDC → USDT")
-            usdt_usdc_ask = market_data['USDT-USDC']['best_ask']
+            usdt_usdc_ask = market_data['USDC-USDT']['best_ask']
             final_usdt = (current_amount / usdt_usdc_ask) * (1 - fee_rate)
             print(f"  获得: {final_usdt:.6f} USDT")
             
@@ -532,7 +532,7 @@ class MiscTests:
             print(f"  💸 总手续费成本: {total_fees:.3%}")
             print(f"  📏 BTC-USDT价差: {market_data['BTC-USDT']['spread_pct']:.4f}%")
             print(f"  📏 BTC-USDC价差: {market_data['BTC-USDC']['spread_pct']:.4f}%")
-            print(f"  📏 USDT-USDC价差: {market_data['USDT-USDC']['spread_pct']:.4f}%")
+            print(f"  📏 USDC-USDT价差: {market_data['USDC-USDT']['spread_pct']:.4f}%")
             
             return {
                 'path': 'USDT->BTC->USDC->USDT',

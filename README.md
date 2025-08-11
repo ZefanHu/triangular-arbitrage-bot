@@ -241,12 +241,12 @@ network_retry_delay = 1.0       # 重试延迟（秒）
 ```ini
 [system]
 # 日志配置
-log_level = INFO                # 日志级别 (DEBUG/INFO/WARNING/ERROR)
-log_file = logs/trading.log     # 日志文件路径
+log_level = INFO                      # 日志级别 (DEBUG/INFO/WARNING/ERROR)
+system_log_file = logs/system_runtime.log  # 系统运行日志文件路径
 
 # 数据存储配置
-enable_trade_history = true                    # 是否记录交易历史
-trade_history_file = logs/trade_history.json   # 交易历史文件路径
+enable_trade_history = true                # 是否记录交易历史
+trade_record_file = logs/trade_records.json  # 交易记录数据文件路径
 ```
 
 ### 🔐 API密钥配置 (config/secrets.ini)

@@ -43,8 +43,11 @@ class TradingBot:
     def __init__(self):
         """Initialize trading bot"""
         self.console = Console()
-        self.logger = setup_logger("TradingBot", "logs/trading_bot.log")
         self.config_manager = ConfigManager()
+        # 从配置文件读取日志路径
+        system_config = self.config_manager.get_system_config()
+        log_file = system_config.get('system_log_file', 'logs/system_runtime.log')
+        self.logger = setup_logger("TradingBot", log_file)
         self.trading_controller: Optional[TradingController] = None
         self.is_running = False
         self.shutdown_event = asyncio.Event()
