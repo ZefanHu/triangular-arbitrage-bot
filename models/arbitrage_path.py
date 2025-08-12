@@ -5,7 +5,7 @@
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 
@@ -140,11 +140,19 @@ class ArbitrageOpportunity:
         path: 套利路径
         profit_rate: 利润率
         min_amount: 最小交易金额
+        max_trade_amount: 最大交易金额
+        min_trade_amount: 最小交易金额（兼容旧字段）
+        trade_steps: 交易步骤详情
+        estimated_profit: 预估利润
     """
     path: ArbitragePath
     profit_rate: float
     min_amount: float
     timestamp: Optional[float] = None
+    max_trade_amount: Optional[float] = None
+    min_trade_amount: Optional[float] = None
+    trade_steps: Optional[List[Dict[str, Any]]] = None
+    estimated_profit: Optional[float] = None
     
     def __post_init__(self):
         """数据验证"""
@@ -154,6 +162,9 @@ class ArbitrageOpportunity:
             raise ValueError("最小交易金额必须为正数")
         if self.timestamp is None:
             self.timestamp = datetime.now().timestamp()
+        # 兼容性处理：如果设置了min_trade_amount但没有min_amount
+        if self.min_trade_amount is not None and self.min_amount == 0:
+            self.min_amount = self.min_trade_amount
     
     def is_profitable(self, threshold: float = 0.001) -> bool:
         """

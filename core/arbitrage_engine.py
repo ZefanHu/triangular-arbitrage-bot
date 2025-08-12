@@ -1,21 +1,9 @@
 import logging
 import time
 import threading
-from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Callable
 from config.config_manager import ConfigManager
-
-
-@dataclass
-class ArbitrageOpportunity:
-    """套利机会数据类"""
-    path: List[str]
-    profit_rate: float
-    min_trade_amount: float
-    max_trade_amount: float
-    trade_steps: List[Dict[str, any]]
-    estimated_profit: float
-    timestamp: float
+from models.arbitrage_path import ArbitragePath, ArbitrageOpportunity
 
 
 class ArbitrageEngine:
@@ -190,8 +178,9 @@ class ArbitrageEngine:
         max_trade_amount = self._calculate_max_trade_amount(trade_steps)
         
         return ArbitrageOpportunity(
-            path=path,
+            path=ArbitragePath(path),
             profit_rate=profit_rate,
+            min_amount=self.min_trade_amount,
             min_trade_amount=self.min_trade_amount,
             max_trade_amount=max_trade_amount,
             trade_steps=trade_steps,
@@ -311,7 +300,7 @@ class ArbitrageEngine:
             if opportunity:
                 opportunity_dict = {
                     'path_name': path_name,
-                    'path': opportunity.path,
+                    'path': opportunity.path.path if hasattr(opportunity.path, 'path') else opportunity.path,
                     'profit_rate': opportunity.profit_rate,
                     'min_trade_amount': opportunity.min_trade_amount,
                     'max_trade_amount': opportunity.max_trade_amount,
@@ -429,8 +418,9 @@ class ArbitrageEngine:
             max_trade_amount = self._calculate_max_trade_amount_from_steps(trade_steps)
             
             return ArbitrageOpportunity(
-                path=path_assets,
+                path=ArbitragePath(path_assets),
                 profit_rate=profit_rate,
+                min_amount=self.min_trade_amount,
                 min_trade_amount=self.min_trade_amount,
                 max_trade_amount=max_trade_amount,
                 trade_steps=trade_steps,

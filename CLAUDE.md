@@ -47,7 +47,6 @@ taoli/
 │   └── trade_logger.py      # 交易日志记录器
 ├── okex/                  # OKX官方API库
 ├── tests/                 # 测试代码
-├── examples/              # 示例代码
 └── main.py               # 程序入口
 ```
 
