@@ -1,8 +1,8 @@
 import configparser
 import os
-import logging
 import time
 import json
+from utils.logger import setup_logger
 
 
 class ConfigManager:
@@ -30,7 +30,7 @@ class ConfigManager:
         self.secrets_path = os.path.join(self.config_dir, 'secrets.ini')
         
         self.config = configparser.ConfigParser()
-        self.logger = logging.getLogger(__name__)
+        self.logger = setup_logger(__name__)
         
         # 配置热更新相关
         self._callbacks = []

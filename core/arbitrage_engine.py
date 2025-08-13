@@ -1,5 +1,5 @@
-import logging
 import time
+from utils.logger import setup_logger
 import threading
 from typing import Dict, List, Optional, Tuple, Callable
 from config.config_manager import ConfigManager
@@ -22,7 +22,7 @@ class ArbitrageEngine:
         """
         self.data_collector = data_collector
         self.config_manager = ConfigManager()
-        self.logger = logging.getLogger(__name__)
+        self.logger = setup_logger(__name__)
         
         # 从配置管理器获取交易配置
         self.trading_config = self.config_manager.get_trading_config()

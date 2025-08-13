@@ -1,5 +1,5 @@
-import logging
 from typing import Dict, Any, Optional, List, Union
+from utils.logger import setup_logger
 import json
 import okex.Account_api as Account
 import okex.Market_api as Market
@@ -17,7 +17,7 @@ class OKXClient:
     
     def __init__(self):
         """初始化OKX客户端"""
-        self.logger = logging.getLogger(__name__)
+        self.logger = setup_logger(__name__)
         self.config_manager = ConfigManager()
         
         # 获取API凭据

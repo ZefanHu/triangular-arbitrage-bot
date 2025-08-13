@@ -4,65 +4,17 @@
 负责执行套利交易的核心组件
 """
 
-import logging
 import time
+from utils.logger import setup_logger
 from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 import json
 import threading
 
 from core.okx_client import OKXClient
 from models.arbitrage_path import ArbitrageOpportunity
-from models.trade import Trade, TradeStatus
-
-
-@dataclass
-class TradeResult:
-    """
-    交易结果数据模型
-    
-    Attributes:
-        success: 是否成功
-        order_id: 订单ID
-        filled_size: 成交数量
-        avg_price: 平均成交价
-        error_message: 错误信息
-        timestamp: 执行时间戳
-        execution_time: 执行耗时（毫秒）
-    """
-    success: bool
-    order_id: Optional[str] = None
-    filled_size: float = 0.0
-    avg_price: float = 0.0
-    error_message: Optional[str] = None
-    timestamp: float = field(default_factory=lambda: datetime.now().timestamp())
-    execution_time: float = 0.0
-
-
-@dataclass
-class ArbitrageRecord:
-    """
-    套利交易记录
-    
-    Attributes:
-        opportunity: 套利机会
-        investment_amount: 投资金额
-        expected_profit: 预期利润
-        actual_profit: 实际利润
-        trade_results: 交易结果列表
-        start_time: 开始时间
-        end_time: 结束时间
-        success: 是否成功
-    """
-    opportunity: ArbitrageOpportunity
-    investment_amount: float
-    expected_profit: float
-    actual_profit: float = 0.0
-    trade_results: List[TradeResult] = field(default_factory=list)
-    start_time: float = field(default_factory=lambda: datetime.now().timestamp())
-    end_time: Optional[float] = None
-    success: bool = False
+from models.trade import Trade, TradeStatus, TradeResult, ArbitrageRecord
 
 
 class BalanceCache:
@@ -78,7 +30,7 @@ class BalanceCache:
         self.last_update: float = 0
         self.cache_ttl: float = 30.0  # 延长缓存有效期，因为有WebSocket实时更新
         self.lock = threading.Lock()
-        self.logger = logging.getLogger(__name__)
+        self.logger = setup_logger(__name__)
         self.websocket_connected = False
     
     def get_balance(self, force_refresh: bool = False) -> Dict[str, float]:
@@ -157,7 +109,7 @@ class TradeExecutor:
             okx_client: OKX客户端实例
         """
         self.okx_client = okx_client
-        self.logger = logging.getLogger(__name__)
+        self.logger = setup_logger(__name__)
         
         # 从配置管理器获取配置
         from config.config_manager import ConfigManager

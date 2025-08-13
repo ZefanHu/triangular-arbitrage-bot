@@ -13,7 +13,6 @@ import asyncio
 import sys
 import os
 import signal
-import logging
 import time
 import hashlib
 import json
@@ -23,7 +22,8 @@ from typing import Optional, Any
 # Ensure project directory is in Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.trading_controller import TradingController, TradingStatus
+from core.trading_controller import TradingController
+from models.trade import SystemStatus
 from config.config_manager import ConfigManager
 from utils.logger import setup_logger
 from rich.console import Console

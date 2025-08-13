@@ -4,8 +4,8 @@
 负责管理交易风险，包括仓位限制、频率控制、资金管理等
 """
 
-import logging
 import time
+from utils.logger import setup_logger
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 from dataclasses import dataclass
@@ -13,37 +13,7 @@ from enum import Enum
 
 from config.config_manager import ConfigManager
 from models.arbitrage_path import ArbitrageOpportunity
-
-
-class RiskLevel(Enum):
-    """风险级别枚举"""
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
-
-
-@dataclass
-class RiskCheckResult:
-    """
-    风险检查结果数据模型
-    
-    Attributes:
-        passed: 是否通过风险检查
-        risk_level: 风险级别
-        message: 检查结果信息
-        suggested_amount: 建议的交易金额
-        warnings: 警告信息列表
-    """
-    passed: bool
-    risk_level: RiskLevel
-    message: str
-    suggested_amount: float = 0.0
-    warnings: List[str] = None
-    
-    def __post_init__(self):
-        if self.warnings is None:
-            self.warnings = []
+from models.trade import RiskLevel, RiskCheckResult
 
 
 class RiskManager:
@@ -63,7 +33,7 @@ class RiskManager:
         """
         self.config_manager = config_manager
         self.okx_client = okx_client
-        self.logger = logging.getLogger(__name__)
+        self.logger = setup_logger(__name__)
         
         # 加载风险配置
         self.risk_config = self.config_manager.get_risk_config()

@@ -1,8 +1,8 @@
 import asyncio
 import websockets
 import json
-import logging
 import time
+from utils.logger import setup_logger
 import zlib
 import hmac
 import base64
@@ -173,7 +173,7 @@ class WebSocketManager:
         Args:
             callback: 消息处理回调函数
         """
-        self.logger = logging.getLogger(__name__)
+        self.logger = setup_logger(__name__)
         self.config_manager = ConfigManager()
         
         # 获取API凭据

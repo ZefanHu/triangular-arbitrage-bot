@@ -13,7 +13,7 @@
 
 本目录包含 TaoLi 三角套利系统的完整测试套件，涵盖单元测试、集成测试和专项测试。所有测试都使用 OKX 的模拟交易 API 进行，确保不会产生真实交易。
 
-所有测试脚本都已统一为独立运行模式，无需依赖 pytest，使用更加简单直接。
+所有测试基于标准的 Python unittest 框架，无需额外的测试框架依赖。
 
 ## 测试文件说明
 
@@ -118,12 +118,38 @@ python3 tests/test_misc.py --test profit-calculation --profit-rate 0.03  # 验�
 ## 测试覆盖率
 
 ### 运行覆盖率测试
+
+#### 方式一：使用测试脚本内置功能
 ```bash
 # 测试models模块覆盖率
 python3 tests/test_models.py --coverage
 
 # 测试core模块覆盖率
 python3 tests/test_run_core.py --coverage
+```
+
+#### 方式二：使用coverage工具直接运行
+```bash
+# 使用coverage运行unittest
+coverage run -m unittest tests.test_models
+coverage run -m unittest tests.test_run_core
+
+# 查看覆盖率报告
+coverage report
+coverage html  # 生成HTML报告
+
+# 运行所有测试并生成覆盖率
+coverage run -m unittest discover tests
+coverage report
+```
+
+#### 方式三：直接使用unittest运行（不生成覆盖率）
+```bash
+# 运行单个测试文件
+python -m unittest tests.test_models -v
+
+# 发现并运行所有测试
+python -m unittest discover tests -v
 ```
 
 ### 覆盖率目标

@@ -5,13 +5,13 @@
 """
 
 import json
-import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 from pathlib import Path
+from utils.logger import setup_logger
 
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 
 class PerformanceAnalyzer:

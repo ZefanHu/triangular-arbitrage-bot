@@ -6,8 +6,8 @@
 
 import json
 import time
-import logging
 from datetime import datetime, timezone
+from utils.logger import setup_logger
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -163,7 +163,7 @@ class TradeLogger:
         self._load_historical_data()
         
         # 设置标准日志记录器
-        self.logger = logging.getLogger(__name__)
+        self.logger = setup_logger(__name__)
         
         self.console.print(Panel(
             "[bold green]交易日志记录器已启动[/bold green]",

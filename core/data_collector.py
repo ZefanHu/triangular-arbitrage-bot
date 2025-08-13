@@ -5,8 +5,8 @@
 """
 
 import asyncio
-import logging
 import time
+from utils.logger import setup_logger
 import threading
 from typing import Dict, Any, Optional, List, Callable
 from core.okx_client import OKXClient
@@ -26,7 +26,7 @@ class DataCollector:
     
     def __init__(self):
         """初始化数据采集器"""
-        self.logger = logging.getLogger(__name__)
+        self.logger = setup_logger(__name__)
         
         # 初始化REST客户端
         self.rest_client = OKXClient()

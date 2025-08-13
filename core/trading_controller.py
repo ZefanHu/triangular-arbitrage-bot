@@ -5,14 +5,12 @@
 """
 
 import asyncio
-import logging
 import time
+from utils.logger import setup_logger
 import threading
 import psutil
 from typing import Dict, List, Optional, Callable
-from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
 
 from core.data_collector import DataCollector
 from core.arbitrage_engine import ArbitrageEngine
@@ -20,46 +18,7 @@ from core.trade_executor import TradeExecutor
 from core.risk_manager import RiskManager
 from config.config_manager import ConfigManager
 from utils.trade_logger import TradeLogger
-
-
-class TradingStatus(Enum):
-    """交易状态枚举"""
-    STOPPED = "stopped"
-    STARTING = "starting"
-    RUNNING = "running"
-    STOPPING = "stopping"
-    ERROR = "error"
-
-
-@dataclass
-class TradingStats:
-    """
-    交易统计信息
-    """
-    start_time: float
-    total_opportunities: int = 0
-    executed_trades: int = 0
-    successful_trades: int = 0
-    failed_trades: int = 0
-    total_profit: float = 0.0
-    total_loss: float = 0.0
-    net_profit: float = 0.0
-    last_opportunity_time: float = 0.0
-    last_trade_time: float = 0.0
-    
-    # 新增性能指标
-    total_execution_time: float = 0.0
-    min_execution_time: float = float('inf')
-    max_execution_time: float = 0.0
-    avg_execution_time: float = 0.0
-    
-    # 新增API统计
-    api_call_count: int = 0
-    api_error_count: int = 0
-    
-    # 新增系统资源统计
-    peak_memory_usage: float = 0.0
-    peak_cpu_usage: float = 0.0
+from models.trade import SystemStatus, TradingStats
 
 
 class TradingController:
@@ -77,7 +36,7 @@ class TradingController:
             config_manager: 配置管理器实例
             enable_rich_logging: 是否启用Rich格式化日志
         """
-        self.logger = logging.getLogger(__name__)
+        self.logger = setup_logger(__name__)
         
         # 配置管理
         self.config_manager = config_manager or ConfigManager()
@@ -95,7 +54,7 @@ class TradingController:
         self.trade_logger = TradeLogger(enable_file_logging=True) if enable_rich_logging else None
         
         # 交易状态
-        self.status = TradingStatus.STOPPED
+        self.status = SystemStatus.STOPPED
         self.is_running = False
         self.trading_loop_task = None
         
@@ -136,13 +95,13 @@ class TradingController:
         
         try:
             self.logger.info("正在启动交易系统...")
-            self.status = TradingStatus.STARTING
+            self.status = SystemStatus.STARTING
             
             # 启动数据采集器
             self.logger.info("启动数据采集器...")
             if not await self.data_collector.start(self.trading_pairs):
                 self.logger.error("数据采集器启动失败")
-                self.status = TradingStatus.ERROR
+                self.status = SystemStatus.ERROR
                 return False
             
             # 等待数据采集器稳定
@@ -163,14 +122,14 @@ class TradingController:
             with self.stats_lock:
                 self.stats = TradingStats(start_time=time.time())
             
-            self.status = TradingStatus.RUNNING
+            self.status = SystemStatus.RUNNING
             self.logger.info("交易系统启动成功")
             
             return True
             
         except Exception as e:
             self.logger.error(f"启动交易系统失败: {e}")
-            self.status = TradingStatus.ERROR
+            self.status = SystemStatus.ERROR
             await self._cleanup()
             return False
     
@@ -187,7 +146,7 @@ class TradingController:
         
         try:
             self.logger.info("正在停止交易系统...")
-            self.status = TradingStatus.STOPPING
+            self.status = SystemStatus.STOPPING
             
             # 停止主交易循环
             self.is_running = False
@@ -216,7 +175,7 @@ class TradingController:
             # 清理资源
             await self._cleanup()
             
-            self.status = TradingStatus.STOPPED
+            self.status = SystemStatus.STOPPED
             self.logger.info("交易系统已停止")
             
             # 输出最终统计
@@ -226,7 +185,7 @@ class TradingController:
             
         except Exception as e:
             self.logger.error(f"停止交易系统失败: {e}")
-            self.status = TradingStatus.ERROR
+            self.status = SystemStatus.ERROR
             return False
     
     async def _trading_loop(self):
