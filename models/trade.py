@@ -5,9 +5,12 @@
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Any
+from typing import Optional, List, TYPE_CHECKING
 from enum import Enum
 from datetime import datetime
+
+if TYPE_CHECKING:
+    from models.arbitrage_path import ArbitrageOpportunity
 
 
 class TradeStatus(Enum):
@@ -73,7 +76,7 @@ class ArbitrageRecord:
         end_time: 结束时间
         success: 是否成功
     """
-    opportunity: Any  # ArbitrageOpportunity type from models.arbitrage_path
+    opportunity: 'ArbitrageOpportunity'  # 套利机会对象
     investment_amount: float
     expected_profit: float
     actual_profit: float = 0.0
@@ -99,11 +102,7 @@ class RiskCheckResult:
     risk_level: RiskLevel
     message: str
     suggested_amount: float = 0.0
-    warnings: List[str] = None
-    
-    def __post_init__(self):
-        if self.warnings is None:
-            self.warnings = []
+    warnings: List[str] = field(default_factory=list)
 
 
 @dataclass
