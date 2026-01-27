@@ -72,7 +72,12 @@ class RiskManager:
         self.logger.info("风险管理器初始化完成")
         self.logger.info(f"风险参数: 最大仓位比例={self.max_position_ratio}, 最大单笔交易比例={self.max_single_trade_ratio}, 最小套利间隔={self.min_arbitrage_interval}秒")
     
-    def check_position_limit(self, asset: str, amount: float) -> RiskCheckResult:
+    def check_position_limit(
+        self,
+        asset: str,
+        amount: float,
+        balance_snapshot: Optional[Dict[str, float]] = None,
+    ) -> RiskCheckResult:
         """
         检查仓位限制
         
@@ -87,12 +92,13 @@ class RiskManager:
         
         try:
             # 获取当前余额
-            current_balance = self.get_current_balance()
+            current_balance = balance_snapshot if balance_snapshot is not None else self.get_current_balance()
             if not current_balance:
+                self.logger.warning("余额不可用，仓位检查拒绝")
                 return RiskCheckResult(
                     passed=False,
                     risk_level=RiskLevel.CRITICAL,
-                    message=f"无法获取当前余额",
+                    message="无法获取当前余额",
                     suggested_amount=0
                 )
             
@@ -250,10 +256,8 @@ class RiskManager:
         try:
             # 获取当前余额
             if balance is None:
-                balance = self.get_current_balance()
-                if not balance:
-                    self.logger.error("无法获取余额信息")
-                    return 0.0
+                self.logger.warning("余额不可用，无法计算交易量")
+                return 0.0
             
             # 计算总资产价值（以USDT计价）
             total_balance_usdt = self._calculate_total_balance_usdt(balance)
@@ -311,8 +315,13 @@ class RiskManager:
             self.logger.error(f"计算交易量异常: {e}")
             return 0.0
     
-    def validate_opportunity(self, opportunity: ArbitrageOpportunity, 
-                           total_balance: float, requested_amount: float = None) -> RiskCheckResult:
+    def validate_opportunity(
+        self,
+        opportunity: ArbitrageOpportunity,
+        total_balance: float,
+        requested_amount: float = None,
+        balance_snapshot: Optional[Dict[str, float]] = None,
+    ) -> RiskCheckResult:
         """
         验证套利机会是否符合风险要求
         
@@ -340,14 +349,32 @@ class RiskManager:
             frequency_result = self.check_arbitrage_frequency()
             if not frequency_result.passed:
                 return frequency_result
+
+            if not balance_snapshot:
+                self.logger.warning("余额不可用，风控拒绝套利机会")
+                return RiskCheckResult(
+                    passed=False,
+                    risk_level=RiskLevel.CRITICAL,
+                    message="余额不可用，拒绝交易",
+                    suggested_amount=0
+                )
+
+            if total_balance is None or total_balance <= 0:
+                self.logger.warning("总资产不可用，风控拒绝套利机会")
+                return RiskCheckResult(
+                    passed=False,
+                    risk_level=RiskLevel.CRITICAL,
+                    message="总资产不可用，拒绝交易",
+                    suggested_amount=0
+                )
             
             # 计算建议的交易金额
             if requested_amount is None:
-                requested_amount = self.calculate_position_size(opportunity)
+                requested_amount = self.calculate_position_size(opportunity, balance_snapshot)
             
             # 检查仓位限制
             start_asset = opportunity.path.get_start_asset()
-            position_result = self.check_position_limit(start_asset, requested_amount)
+            position_result = self.check_position_limit(start_asset, requested_amount, balance_snapshot)
             if not position_result.passed:
                 return position_result
             
@@ -662,6 +689,13 @@ class RiskManager:
         except Exception as e:
             self.logger.error(f"检查订单簿深度限制异常: {e}")
             return amount
+
+    def calculate_total_balance_usdt(self, balance_snapshot: Dict[str, float]) -> float:
+        """计算总资产价值（以USDT计价）"""
+        if not balance_snapshot:
+            self.logger.warning("余额不可用，无法计算总资产")
+            return 0.0
+        return self._calculate_total_balance_usdt(balance_snapshot)
     
     def _calculate_total_balance_usdt(self, balance: Dict[str, float]) -> float:
         """计算总资产价值（以USDT计价）"""

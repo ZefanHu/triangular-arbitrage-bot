@@ -413,12 +413,13 @@ class TradingController:
             try:
                 # 获取当前余额
                 portfolio = self.data_collector.get_balance()
-                if not portfolio:
-                    self.logger.error("无法获取账户余额")
+                if not portfolio or not portfolio.balances:
+                    self.logger.warning("余额不可用，跳过本次套利机会")
+                    self.risk_manager.record_rejected_opportunity("余额不可用，跳过交易")
                     return
                 
                 balance = portfolio.balances
-                total_balance_usdt = sum(balance.values())  # 简化计算
+                total_balance_usdt = self.risk_manager.calculate_total_balance_usdt(balance)
                 
                 # 创建ArbitrageOpportunity对象
                 from models.arbitrage_path import ArbitrageOpportunity, ArbitragePath
@@ -445,8 +446,9 @@ class TradingController:
                 
                 # 验证套利机会
                 risk_result = self.risk_manager.validate_opportunity(
-                    arb_opportunity, 
-                    total_balance_usdt
+                    arb_opportunity,
+                    total_balance_usdt,
+                    balance_snapshot=balance
                 )
                 
                 if not risk_result.passed:
