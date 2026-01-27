@@ -79,6 +79,13 @@ class TradingController:
         
         # 获取交易对配置
         self.trading_pairs = self._get_trading_pairs()
+
+        # 检查API凭据，缺失则进入只读模式
+        self.read_only_mode = False
+        if not self.config_manager.get_api_credentials():
+            self.read_only_mode = True
+            self.disable_trading("API凭据缺失，进入只读/监控模式")
+            self.logger.warning("API凭据缺失或不完整，已进入READ_ONLY模式：交易与私有账户功能已禁用")
         
         self.logger.info("交易控制器初始化完成")
     
