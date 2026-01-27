@@ -43,11 +43,10 @@ taoli/                        # OKX三角套利交易系统
 │   ├── logger.py             # 📝 日志工具 - Rich格式化输出
 │   ├── trade_logger.py       # 📊 交易日志器 - 专业交易记录
 │   └── performance_analyzer.py # 📈 性能分析器 - 系统监控
-├── 🧪 tests/                # 全面测试覆盖
-│   ├── test_core_comprehensive.py  # 核心功能测试
-│   ├── test_run_core.py      # 快速功能验证
+├── 🧪 tests/                # 测试脚本
+│   ├── test_run_core.py      # 核心功能验证
 │   ├── test_models.py        # 数据模型测试
-│   └── test_arbitrage_*.py   # 套利算法测试
+│   └── test_misc.py          # 工具/杂项测试
 ├── 🔌 okex/                 # OKX官方API库
 ├── 📝 main.py               # ⭐ 主程序入口
 └── 📦 requirements.txt      # 项目依赖
@@ -73,7 +72,7 @@ taoli/                        # OKX三角套利交易系统
 └─────────────────┘    └─────────────────┘
 ```
 
-## 🚀 主程序使用 (main.py)
+## 🚀 快速开始 (main.py)
 
 ### 启动系统
 
@@ -82,27 +81,36 @@ taoli/                        # OKX三角套利交易系统
 python main.py
 ```
 
+### 无 secrets.ini（READ_ONLY）
+
+- `config/secrets.ini` 缺失或不完整时，交易控制器会进入 **READ_ONLY**：仅监控、禁用交易与私有账户相关功能。
+- 推荐先选择 **Monitor Mode** 熟悉系统行为（不会下单）。
+
+### 有 secrets.ini（允许交易）
+
+```bash
+# 复制API配置模板
+cp config/secrets.ini.example config/secrets.ini
+
+# 编辑配置文件，填入你的API信息
+nano config/secrets.ini
+```
+
+配置完成后启动程序，选择 **Auto Mode** 可进行自动交易。
+
 ### 运行模式选择
 
-系统启动后会提示选择运行模式：
+系统启动后会提示选择运行模式（实际支持的模式如下）：
 
-1. **🤖 自动交易模式 (trading)**
+1. **🤖 Auto Mode (auto)**
    - 自动执行三角套利交易
    - 实时监控套利机会
    - 自动风险控制
-   - 支持实盘和模拟盘
 
-2. **📊 监控模式 (monitor)**  
+2. **📊 Monitor Mode (monitor)**  
    - 仅监控不交易
    - 实时显示套利机会
    - 查看市场数据和分析
-   - 无风险了解系统运行
-
-3. **🧪 测试模式 (test)**
-   - 系统功能测试
-   - 验证配置和连接
-   - 检查API权限
-   - 不执行实际交易
 
 ### 监控界面功能
 
@@ -113,14 +121,7 @@ python main.py
 - **价格监控** - 关键交易对实时价格
 - **交易统计** - 成功/失败次数、总利润
 - **性能指标** - CPU、内存、API调用统计
-- **控制指令** - 键盘快捷键操作
-
-### 键盘控制
-
-- `Space` - 暂停/恢复交易
-- `R` - 刷新显示
-- `Q` - 退出程序
-- `Ctrl+C` - 强制退出
+- **控制指令** - Ctrl+C 安全退出
 
 ## 🔧 环境要求
 
@@ -145,30 +146,9 @@ source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 ```
 
-## 配置方法
+## 配置说明
 
-### 1. 配置API密钥
-
-```bash
-# 复制API配置模板
-cp config/secrets.ini.example config/secrets.ini
-
-# 编辑配置文件，填入你的API信息
-nano config/secrets.ini
-```
-
-**secrets.ini 配置说明**
-```ini
-[api]
-api_key = your_api_key_here
-secret_key = your_secret_key_here
-passphrase = your_passphrase_here
-
-# 实盘=0, 模拟盘=1 (建议先使用模拟盘测试)
-flag = 1
-```
-
-### 2. 配置文件详细说明
+以下示例与注释以 `config/settings.ini` 与配置加载逻辑为准。
 
 ### 📊 主配置文件 (config/settings.ini)
 
@@ -181,8 +161,8 @@ path1 = {"route": "USDT->BTC->USDC->USDT", "steps": [{"pair": "BTC-USDT", "actio
 path2 = {"route": "USDT->USDC->BTC->USDT", "steps": [{"pair": "USDC-USDT", "action": "buy"}, {"pair": "BTC-USDC", "action": "buy"}, {"pair": "BTC-USDT", "action": "sell"}]}
 
 # 初始持有量配置（根据实际账户资金设置）
-initial_usdt = 40.54317        # USDT初始数量
-initial_usdc = 30.0            # USDC初始数量
+initial_usdt = 89.54           # USDT初始数量
+initial_usdc = 31.00           # USDC初始数量
 initial_btc = 0.0002997        # BTC初始数量
 
 # 再平衡阈值（偏差百分比）
@@ -194,11 +174,11 @@ fee_rate = 0.001               # 默认手续费率（兜底配置）
 # 按交易对的差异化手续费配置（根据OKX实际费率设置）
 fee_rate_usdc_usdt = 0.0       # USDC-USDT免手续费
 fee_rate_btc_usdt = 0.001      # BTC-USDT标准手续费
-fee_rate_btc_usdc = 0.001      # BTC-USDC标准手续费
+fee_rate_btc_usdc = 0.0007     # BTC-USDC优惠手续费
 
 # 交易执行参数
 slippage_tolerance = 0.002     # 滑点容忍度 (0.2%)
-min_profit_threshold = 0.003   # 最小利润阈值 (0.3%)
+min_profit_threshold = 0.0001  # 最小利润阈值 (0.01%)
 order_timeout = 3.0            # 订单超时时间（秒）
 min_trade_amount = 10.0        # 最小交易金额（美元）
 monitor_interval = 1.0         # 监控间隔（秒）
@@ -218,8 +198,8 @@ stablecoin_price_range_max = 1.02       # 稳定币价格上限
 ```ini
 [risk]
 # 仓位控制参数
-max_position_ratio = 0.3        # 最大仓位比例 (30%总资产)
-max_single_trade_ratio = 0.15   # 单笔最大交易比例 (15%总资产)
+max_position_ratio = 1          # 最大仓位比例 (100%总资产)
+max_single_trade_ratio = 1      # 单笔最大交易比例 (100%总资产)
 
 # 交易频率控制
 min_arbitrage_interval = 10     # 套利最小间隔（秒）
@@ -264,58 +244,63 @@ passphrase = your_passphrase_here  # Passphrase（创建API时设置）
 flag = 1                           # 0=实盘, 1=模拟盘（强烈建议先使用模拟盘）
 ```
 
-### 📝 配置最佳实践
+### 📝 配置提示
 
-1. **手续费配置优化**
-   - 系统支持按交易对配置不同的手续费率
-   - OKX对某些稳定币交易对（如USDC-USDT）提供零手续费
-   - 正确配置可显著提高套利收益（可节省约33%的手续费成本）
-
-2. **风险参数调整建议**
-   - **小额账户**（<$1000）：可适当提高仓位比例至30-40%
-   - **大额账户**（>$10000）：建议保持保守的10-20%仓位
-   - **初次使用**：建议使用最小交易金额测试
-
-3. **路径配置说明**
+1. **路径配置说明**
    - 每个路径必须形成闭环（起点和终点相同）
    - steps中的action只有两种：buy（买入）和sell（卖出）
    - pair格式必须与OKX交易对格式一致（如BTC-USDT）
 
-4. **性能优化建议**
-   - `monitor_interval`：网络好时可设为0.5-1秒，网络差时设为2-3秒
-   - `order_timeout`：根据网络延迟调整，通常3-5秒较合适
-   - `balance_check_interval`：频繁交易时可设为30秒，否则60秒即可
+2. **READ_ONLY 行为**
+   - 当 `secrets.ini` 缺失或凭据不完整时，系统会禁用交易与私有账户功能，仅监控公开市场数据。
+
+## 🔍 运行模式说明
+
+- **Auto Mode**：自动交易（需要有效的 API 凭据）。
+- **Monitor Mode**：只监控不交易（仍会进行套利分析与面板展示）。
 
 ## 🧪 测试与验证
 
-### 📋 快速功能测试
+### 📋 可用测试文件
+
+当前 tests 目录包含：
+- `tests/test_run_core.py`
+- `tests/test_models.py`
+- `tests/test_misc.py`
+
+### ✅ 可执行测试命令
 ```bash
-# 运行核心功能快速验证 (30-60秒)
+# 运行核心功能快速验证
 python tests/test_run_core.py
 
-# 生成详细覆盖率报告
+# 生成覆盖率报告
 python tests/test_run_core.py --coverage
 
 # 完整系统测试
 python tests/test_run_core.py --full
+
+# 运行模型/工具类测试
+python tests/test_models.py
+python tests/test_misc.py
 ```
 
-### 📊 实时监控
-```bash
-# 启动主程序并选择监控模式
-python main.py
-# 然后选择 2 (Monitor Mode)
-```
+> `tests/test_run_core.py` 会调用 OKX API 并依赖网络与有效 API 凭据。
 
-### 🔍 可用的测试功能
-- ✅ **配置管理验证** - API密钥、交易参数有效性检查
-- ✅ **OKX API连接测试** - 网络连接、认证状态验证  
-- ✅ **数据采集测试** - WebSocket连接、订单簿获取
-- ✅ **套利引擎测试** - 机会识别、利润计算验证
-- ✅ **风险管理测试** - 仓位控制、频率限制验证
-- ✅ **交易执行测试** - 订单管理、错误处理验证
-- ✅ **系统集成测试** - 端到端流程验证
-- ✅ **性能基准测试** - 响应时间、资源使用分析
+## 📦 关键依赖说明
+
+- `websockets`：用于 `core/websocket_manager.py` 的实时行情与私有频道连接。
+- `psutil`：用于 `core/trading_controller.py` 的系统资源监控与测试脚本的性能统计。
+
+## ❓ 常见问题 / 排错
+
+1. **什么是 READ_ONLY？**
+   - 当 `secrets.ini` 缺失或 API 凭据不完整时，交易控制器会禁用交易，OKX 客户端进入只读模式，仅使用公开市场数据。
+
+2. **为什么余额/私有数据不可用？**
+   - 只读模式下会跳过账户与交易类接口，余额查询会返回空结果。
+
+3. **如何启用交易？**
+   - 复制 `config/secrets.ini.example` 为 `config/secrets.ini`，填写 API Key/Secret/Passphrase，并在启动时选择 **Auto Mode**。
 
 ## 🚨 重要风险提示与最佳实践
 
