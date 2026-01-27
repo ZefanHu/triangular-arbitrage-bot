@@ -63,7 +63,7 @@
 
 ### RiskManager
 - **职责**：仓位/频率/损失等风控校验与交易额度计算。
-- **输入**：ArbitrageOpportunity、总资产（USDT 估算）、余额（OKXClient 可选）。
+- **输入**：ArbitrageOpportunity、总资产（USDT 估算）、余额快照（由 TradingController 传入；OKXClient 为可选回退）。
 - **输出**：RiskCheckResult、建议交易额度、风险统计。
 - **关键方法**：
   - `validate_opportunity()`
@@ -116,6 +116,8 @@ TradingBot] --> TC[TradingController]
     DC --> PF
 ```
 
+> READ_ONLY/无凭据模式：`OKXClient` 与 `WebSocketManager` 会进入 `public_only` 并禁用私有账户/交易能力，`TradingController` 设置 `read_only_mode` 并调用 `disable_trading()`。
+
 ## 与预期架构图一致/不一致差异清单（含证据与影响）
 
 > 核验方式：阅读 `main.py` 与 `core/*` 主链路代码，结合 `rg` 搜索直接调用点。未发现生产链路绕过 TradingController 的下单路径；若后续新增调用请复核。
@@ -139,10 +141,10 @@ TradingBot] --> TC[TradingController]
    - **影响**：系统可启动并监控行情，但私有账户/交易能力不可用。
    - **建议**：文档标注 READ_ONLY 行为与受限能力，避免误以为启动失败。
 
-3) **余额与资产估值存在多来源**
-   - **证据**：`TradingController` 通过 `DataCollector.get_balance()` 获取 `Portfolio` 并用 `sum(balance.values())` 估算总资产；`RiskManager.check_position_limit()` 通过 `okx_client.get_balance()` 获取余额并自行估值。
-   - **影响**：可能导致风险校验与主控估值不一致（数据来源与估值模型不同），在高频/延迟情况下引发风险判断偏差。
-   - **建议**：文档标注双源余额路径，建议统一数据源或明确优先级。
+3) **主链路余额口径已统一为 DataCollector 余额快照**
+   - **证据**：`TradingController` 获取 `DataCollector.get_balance()` 的 `Portfolio.balances` 作为 `balance_snapshot`，并用 `RiskManager.calculate_total_balance_usdt()` 计算总资产；`RiskManager.validate_opportunity()`/`calculate_position_size()`/`check_position_limit()` 主链路均使用传入的快照并在余额不可用时拒绝交易。
+   - **影响**：主链路风控与交易量计算使用同一份余额快照；余额不可用时 fail-safe 拒绝交易。
+   - **备注**：`RiskManager.get_current_balance()` 仍保留 OKXClient 余额回退（非主链路），用于无快照时的辅助查询。
 
 4) **旁路/绕行风险（生产链路未发现，测试/潜在入口需标注）**
    - **验证结果**：`main.py` → `TradingController` 为唯一生产入口；未发现生产代码中直接绕过 `TradingController` 调用 `RiskManager`/`TradeExecutor` 的路径。
