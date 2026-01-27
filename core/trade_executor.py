@@ -284,6 +284,69 @@ class TradeExecutor:
                 'error': f'执行套利交易时发生异常: {str(e)}',
                 'trades': []
             }
+
+    def _execute_single_trade_with_safety(self, inst_id: str, side: str, size: float, price: float) -> TradeResult:
+        """
+        安全执行单笔交易，确保异常可控
+
+        Args:
+            inst_id: 交易对ID
+            side: 交易方向
+            size: 交易数量
+            price: 交易价格
+
+        Returns:
+            交易结果
+        """
+        try:
+            result = self._execute_single_trade(inst_id, side, size, price)
+            if not isinstance(result, TradeResult):
+                self.logger.error(f"单笔交易返回结果类型异常: {type(result)}")
+                return TradeResult(
+                    success=False,
+                    error_message="单笔交易返回结果类型异常"
+                )
+            return result
+        except Exception as e:
+            self.logger.error(f"安全执行单笔交易时发生异常: {e}")
+            return TradeResult(
+                success=False,
+                error_message=f"安全执行单笔交易时发生异常: {str(e)}"
+            )
+
+    def _handle_trade_failure(self, record: ArbitrageRecord, trade_index: int, result: TradeResult) -> None:
+        """
+        处理交易失败，记录上下文信息
+
+        Args:
+            record: 套利交易记录
+            trade_index: 失败交易索引（从0开始）
+            result: 交易结果
+        """
+        error_message = result.error_message or "未知错误"
+        order_id = result.order_id or "unknown"
+        self.logger.error(
+            f"套利交易失败处理: 第 {trade_index + 1} 笔交易失败, 订单ID={order_id}, 错误={error_message}"
+        )
+
+        record.success = False
+        record.end_time = datetime.now().timestamp()
+        if record not in self.trade_records:
+            self.trade_records.append(record)
+
+    def _post_trade_processing(self, trade: Trade, result: TradeResult) -> None:
+        """
+        交易后处理，更新交易信息并记录日志
+
+        Args:
+            trade: 交易对象
+            result: 交易结果
+        """
+        if result.order_id and not trade.order_id:
+            trade.order_id = result.order_id
+        self.logger.debug(
+            f"交易后处理完成: {trade.inst_id} {trade.side} 成交量={result.filled_size} 均价={result.avg_price}"
+        )
     
     def _execute_single_trade(self, inst_id: str, side: str, size: float, price: float) -> TradeResult:
         """
