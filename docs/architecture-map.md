@@ -81,7 +81,7 @@
   - `_execute_single_trade()` / `_wait_order_filled()`
   - `_generate_trades()` / `get_balance_check()`
 - **依赖**：OKXClient、ArbitrageOpportunity、Trade/TradeResult。
-- **注意**：`execute_arbitrage()` 调用的 `_execute_single_trade_with_safety()` / `_handle_trade_failure()` / `_post_trade_processing()` 在文件内未定义，需作为差异点记录。
+- **注意**：`execute_arbitrage()` 调用的 `_execute_single_trade_with_safety()` / `_handle_trade_failure()` / `_post_trade_processing()` 已在 `TradeExecutor` 内定义。
 
 ## 架构关系图（Mermaid）
 
