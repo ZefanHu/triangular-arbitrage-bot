@@ -8,7 +8,7 @@
 | **Opportunity**（Dict） | ArbitrageEngine `find_opportunities()` | TradingController `_trading_loop()` | 机会列表在主循环处理，并记录到 TradeLogger。 |
 | **ArbitrageOpportunity** | TradingController `_process_opportunity_in_loop()` | RiskManager / TradeExecutor | 由 `ArbitragePath` 组装，用于风控与执行。 |
 | **Trade / TradeResult** | TradeExecutor `_generate_trades()` / `_execute_single_trade()` / `_wait_order_filled()` | TradingController `_log_trade_result()` / `_handle_trade_result()` | 交易结果驱动统计、日志与风控记录。 |
-| **Portfolio** | DataCollector `get_balance()`（REST） | TradingController `_process_opportunity_in_loop()` | 余额用于估算总资产与计算交易量；READ_ONLY/无凭据时可能为 None，余额不保证可用或更新。 |
+| **Portfolio** | DataCollector `get_balance()`（REST） | TradingController `_process_opportunity_in_loop()` | 余额用于计算 `total_balance_usdt` 与交易量；READ_ONLY/无凭据或余额不可用时可能为 None/空，Controller 会跳过机会并记录拒绝原因。 |
 
 ## 行情数据流时序（WS/REST → DataCollector → OrderBook → ArbitrageEngine → TradingController）
 
@@ -54,39 +54,46 @@ sequenceDiagram
     TC->>AE: find_opportunities()
     AE-->>TC: opportunities
     TC->>DC: get_balance() -> Portfolio
-    alt 余额不可用（READ_ONLY/无凭据）
-        TC-->>TL: 仅记录机会与错误/监控信息
+    alt 余额不可用（None/空 balances）
+        TC-->>TL: 记录拒绝原因（余额不可用）
         TC-->>TC: 终止本次机会处理
     else 余额可用
-        TC->>RM: check_arbitrage_frequency()
-        alt 风控拒绝(频率)
-            RM-->>TC: RiskCheckResult(passed=false)
-            TC-->>TL: 记录拒绝原因
-        else 频率通过
-            TC->>RM: validate_opportunity(opportunity, total_balance)
-            alt 风控拒绝(交易禁用/仓位/利润/过期等)
+        alt READ_ONLY / 交易禁用
+            TC-->>TL: 记录拒绝原因（交易禁用）
+            TC-->>TC: 终止本次机会处理
+        else 允许交易
+            TC->>RM: check_arbitrage_frequency()
+            alt 风控拒绝(频率)
                 RM-->>TC: RiskCheckResult(passed=false)
                 TC-->>TL: 记录拒绝原因
-            else 风控通过
-                TC->>RM: calculate_position_size()
-                RM-->>TC: trade_amount
-                TC->>TE: execute_arbitrage(opportunity, trade_amount)
-                TE->>OKX: get_balance / get_ticker / place_order / get_order_status
-                alt 下单失败或超时
-                    TE-->>OKX: cancel_order
-                    TE-->>TC: success=false, error
-                else 部分成交
-                    TE->>OKX: 继续轮询
-                    TE-->>TC: success=false (超时或取消)
-                else 成功成交
-                    TE-->>TC: success=true, TradeResult list
+            else 频率通过
+                TC->>RM: validate_opportunity(opportunity, total_balance_usdt, balance_snapshot=balance)
+                alt 风控拒绝(交易禁用/仓位/利润/过期/余额等)
+                    RM-->>TC: RiskCheckResult(passed=false)
+                    TC-->>TL: 记录拒绝原因
+                else 风控通过
+                    TC->>RM: calculate_position_size(balance)
+                    RM-->>TC: trade_amount
+                    TC->>TE: execute_arbitrage(opportunity, trade_amount)
+                    TE->>OKX: get_balance / get_ticker / place_order / get_order_status
+                    alt 下单失败或超时
+                        TE-->>OKX: cancel_order
+                        TE-->>TC: success=false, error
+                    else 部分成交
+                        TE->>OKX: 继续轮询
+                        TE-->>TC: success=false (超时或取消)
+                    else 成功成交
+                        TE-->>TC: success=true, TradeResult list
+                    end
+                    TC-->>TL: log_trade_executed(result)
+                    TC->>RM: record_arbitrage_attempt(success, profit)
                 end
-                TC-->>TL: log_trade_executed(result)
-                TC->>RM: record_arbitrage_attempt(success, profit)
             end
         end
     end
 ```
+
+> 总资产口径：`TradingController` 使用 `RiskManager.calculate_total_balance_usdt(balance)` 计算 `total_balance_usdt`，而非直接 `sum(balance.values())`。
 
 ## 旁路/绕行的实际时序（测试/潜在入口）
 
