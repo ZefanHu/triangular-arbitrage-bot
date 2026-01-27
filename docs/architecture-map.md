@@ -131,10 +131,13 @@ TradingBot] --> TC[TradingController]
      - 可导致并发/节奏不一致、日志链路分裂。
    - **建议**：文档中标注“仅主链路使用同步模式”，避免生产中直接启用监控线程。
 
-2) **TradeExecutor 存在未定义方法引用**
-   - **证据**：`execute_arbitrage()` 调用 `_execute_single_trade_with_safety()` / `_handle_trade_failure()` / `_post_trade_processing()`，但文件中无对应方法定义。
-   - **影响**：运行时触发将导致 AttributeError，交易流程中断；回滚/失败处理链路缺失。
-   - **建议**：文档标注缺失实现，后续补齐或改回已实现方法。
+2) **缺少 secrets.ini 时系统进入只读模式（READ_ONLY）**
+   - **证据**：
+     - `OKXClient` 在无凭据时 `public_only=True`，账户/交易接口禁用。
+     - `WebSocketManager` 在无凭据时仅连接公共频道，跳过私有频道。
+     - `TradingController` 无凭据时 `read_only_mode=True` 并调用 `disable_trading()`。
+   - **影响**：系统可启动并监控行情，但私有账户/交易能力不可用。
+   - **建议**：文档标注 READ_ONLY 行为与受限能力，避免误以为启动失败。
 
 3) **余额与资产估值存在多来源**
    - **证据**：`TradingController` 通过 `DataCollector.get_balance()` 获取 `Portfolio` 并用 `sum(balance.values())` 估算总资产；`RiskManager.check_position_limit()` 通过 `okx_client.get_balance()` 获取余额并自行估值。
