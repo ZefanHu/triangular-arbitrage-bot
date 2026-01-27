@@ -22,22 +22,31 @@ class OKXClient:
         
         # 获取API凭据
         credentials = self.config_manager.get_api_credentials()
+        self.public_only = False
         if not credentials:
-            raise ValueError("无法获取API凭据，请检查secrets.ini文件")
-        
-        self.api_key = credentials['api_key']
-        self.secret_key = credentials['secret_key']
-        self.passphrase = credentials['passphrase']
-        self.flag = credentials['flag']  # '1'为模拟盘，'0'为实盘
+            self.public_only = True
+            self.api_key = ""
+            self.secret_key = ""
+            self.passphrase = ""
+            self.flag = self.config_manager.get('api', 'flag', '1')
+            self.logger.warning("API凭据缺失，OKX客户端进入只读模式：账户与交易接口已禁用")
+        else:
+            self.api_key = credentials['api_key']
+            self.secret_key = credentials['secret_key']
+            self.passphrase = credentials['passphrase']
+            self.flag = credentials['flag']  # '1'为模拟盘，'0'为实盘
         
         # 初始化各个API对象
-        self.account_api = Account.AccountAPI(
-            self.api_key, 
-            self.secret_key, 
-            self.passphrase, 
-            False, 
-            self.flag
-        )
+        self.account_api = None
+        self.trade_api = None
+        if not self.public_only:
+            self.account_api = Account.AccountAPI(
+                self.api_key, 
+                self.secret_key, 
+                self.passphrase, 
+                False, 
+                self.flag
+            )
         
         self.market_api = Market.MarketAPI(
             self.api_key, 
@@ -47,13 +56,14 @@ class OKXClient:
             self.flag
         )
         
-        self.trade_api = Trade.TradeAPI(
-            self.api_key, 
-            self.secret_key, 
-            self.passphrase, 
-            False, 
-            self.flag
-        )
+        if not self.public_only:
+            self.trade_api = Trade.TradeAPI(
+                self.api_key, 
+                self.secret_key, 
+                self.passphrase, 
+                False, 
+                self.flag
+            )
         
         self.logger.info(f"OKX客户端初始化完成，使用{'模拟盘' if self.flag == '1' else '实盘'}")
     
@@ -66,6 +76,9 @@ class OKXClient:
             失败返回None
         """
         try:
+            if self.public_only or not self.account_api:
+                self.logger.warning("只读模式下无法获取账户余额")
+                return None
             result = self.account_api.get_account()
             self.logger.debug("获取账户余额成功")
             
@@ -155,6 +168,9 @@ class OKXClient:
             订单ID，失败返回None
         """
         try:
+            if self.public_only or not self.trade_api:
+                self.logger.warning("只读模式下禁止下单")
+                return None
             # 现货交易使用cash模式
             result = self.trade_api.place_order(
                 instId=inst_id,
@@ -189,6 +205,9 @@ class OKXClient:
             撤单是否成功
         """
         try:
+            if self.public_only or not self.trade_api:
+                self.logger.warning("只读模式下禁止撤单")
+                return False
             result = self.trade_api.cancel_order(inst_id, order_id)
             
             if result and 'data' in result and result['data']:
@@ -257,6 +276,9 @@ class OKXClient:
             订单状态信息，失败返回None
         """
         try:
+            if self.public_only or not self.trade_api:
+                self.logger.warning("只读模式下无法获取订单状态")
+                return None
             result = self.trade_api.get_orders(inst_id, order_id)
             self.logger.debug(f"获取{inst_id}订单{order_id}状态成功")
             

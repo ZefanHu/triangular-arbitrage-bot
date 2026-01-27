@@ -178,13 +178,19 @@ class WebSocketManager:
         
         # 获取API凭据
         credentials = self.config_manager.get_api_credentials()
+        self.public_only = False
         if not credentials:
-            raise ValueError("无法获取API凭据，请检查secrets.ini文件")
-        
-        self.api_key = credentials['api_key']
-        self.secret_key = credentials['secret_key']
-        self.passphrase = credentials['passphrase']
-        self.flag = credentials['flag']
+            self.public_only = True
+            self.api_key = ""
+            self.secret_key = ""
+            self.passphrase = ""
+            self.flag = self.config_manager.get('api', 'flag', '1')
+            self.logger.warning("API凭据缺失，WebSocket仅连接公共频道（私有频道已禁用）")
+        else:
+            self.api_key = credentials['api_key']
+            self.secret_key = credentials['secret_key']
+            self.passphrase = credentials['passphrase']
+            self.flag = credentials['flag']
         
         # WebSocket连接URL
         if self.flag == '1':  # 模拟盘
@@ -239,6 +245,9 @@ class WebSocketManager:
             self.message_loop_task = asyncio.create_task(self._start_message_loop())
             
             # 连接私有频道（用于账户余额）
+            if self.public_only:
+                self.logger.info("只读模式下跳过私有频道连接")
+                return True
             await self._connect_private_channel()
             
             return True
@@ -685,6 +694,9 @@ class WebSocketManager:
             连接是否成功
         """
         try:
+            if self.public_only:
+                self.logger.warning("只读模式下无法连接私有频道")
+                return False
             self.logger.info(f"正在连接私有频道WebSocket: {self.private_url}")
             
             # 连接私有频道
