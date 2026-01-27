@@ -9,14 +9,14 @@
   - **建议**：更新 README 运行模式描述，仅保留 Auto/Monitor；移除或改写键盘控制说明。
 
 - **P2 — README 的运行示例暗示直接 `python main.py` 即可完整启动**
-  - **证据**：`WebSocketManager` 与 `OKXClient` 初始化需要 `secrets.ini` API 凭据，缺失会直接报错。
-  - **建议**：在运行步骤中强调 secrets.ini 必须配置，否则启动失败。
+  - **证据**：`ConfigManager.get_api_credentials()` 缺失时返回 None，`TradingController` 会进入 READ_ONLY 并禁用交易；`OKXClient`/`WebSocketManager` 在无凭据时仅启用公共能力。
+  - **建议**：在运行步骤中说明未配置 secrets.ini 时进入只读/监控模式，可启动但无法交易或使用私有账户功能。
 
 ## 2) 配置（Config）
 
 - **P0 — README 描述 `secrets.ini` 必须存在，但仓库默认仅有 `secrets.ini.example`**
-  - **证据**：`ConfigManager.get_api_credentials()` 若缺少 secrets.ini 会返回 None 并导致初始化失败。
-  - **建议**：README 明确提示必须复制 `secrets.ini.example` 为 `secrets.ini` 并填充凭据。
+  - **证据**：`ConfigManager.get_api_credentials()` 若缺少 secrets.ini 会返回 None；系统会进入 READ_ONLY，交易与私有账户功能被禁用。
+  - **建议**：README 明确提示：启用真实交易/账户余额/私有频道需配置 secrets.ini；否则为只读监控模式。
 
 - **P1 — README 示例配置与 `settings.ini` 实际值不一致**
   - **证据**：
