@@ -28,6 +28,7 @@ class ArbitrageEngine:
         self.trading_config = self.config_manager.get_trading_config()
         self.paths = self.trading_config.get('paths', {})
         self.fee_rate = self.trading_config.get('parameters', {}).get('fee_rate', 0.001)
+        self.slippage_tolerance = self.trading_config.get('parameters', {}).get('slippage_tolerance', 0.0)
         self.min_profit_threshold = self.trading_config.get('parameters', {}).get('min_profit_threshold', 0.003)
         self.min_trade_amount = float(self.config_manager.get('trading', 'min_trade_amount', 100.0))
         
@@ -60,6 +61,7 @@ class ArbitrageEngine:
         
         self.logger.info("套利引擎初始化完成")
         self.logger.info(f"默认手续费率: {self.fee_rate}")
+        self.logger.info(f"滑点容忍度: {self.slippage_tolerance:.4%}")
         self.logger.info(f"最小利润阈值: {self.min_profit_threshold}")
         self.logger.info(f"最小交易金额: {self.min_trade_amount}")
         self.logger.info(f"监控间隔: {self.monitor_interval}秒")
@@ -542,10 +544,14 @@ class ArbitrageEngine:
                 if price == 0:
                     self.logger.error(f"步骤{i+1}: {pair} {action} 价格为0")
                     return 0, -1
+                effective_price = price * (1 + self.slippage_tolerance)
                 # 买入计算：current_amount / price（获得多少目标资产）
                 prev_amount = current_amount
-                current_amount = (current_amount / price) * (1 - pair_fee_rate)
-                self.logger.debug(f"步骤{i+1}: {pair} {action} @ {price}, {prev_amount:.6f} -> {current_amount:.6f} (手续费:{pair_fee_rate:.3%})")
+                current_amount = (current_amount / effective_price) * (1 - pair_fee_rate)
+                self.logger.debug(
+                    f"步骤{i+1}: {pair} {action} @ {price} (滑点后 {effective_price}), "
+                    f"{prev_amount:.6f} -> {current_amount:.6f} (手续费:{pair_fee_rate:.3%})"
+                )
             else:  # sell
                 # 卖出时使用买一价（bids）
                 if hasattr(order_book, 'bids') and order_book.bids:
@@ -557,10 +563,14 @@ class ArbitrageEngine:
                 if price == 0:
                     self.logger.error(f"步骤{i+1}: {pair} {action} 价格为0")
                     return 0, -1
+                effective_price = price * (1 - self.slippage_tolerance)
                 # 卖出计算：current_amount * price（获得多少计价资产）
                 prev_amount = current_amount
-                current_amount = (current_amount * price) * (1 - pair_fee_rate)
-                self.logger.debug(f"步骤{i+1}: {pair} {action} @ {price}, {prev_amount:.6f} -> {current_amount:.6f} (手续费:{pair_fee_rate:.3%})")
+                current_amount = (current_amount * effective_price) * (1 - pair_fee_rate)
+                self.logger.debug(
+                    f"步骤{i+1}: {pair} {action} @ {price} (滑点后 {effective_price}), "
+                    f"{prev_amount:.6f} -> {current_amount:.6f} (手续费:{pair_fee_rate:.3%})"
+                )
         
         profit_rate = (current_amount - amount) / amount
         self.logger.debug(f"套利计算完成: {amount} -> {current_amount:.6f}, 利润率: {profit_rate:.6%}")
@@ -735,7 +745,8 @@ class ArbitrageEngine:
                 if price == 0:
                     return 0, -1
                 # 计算获得的数量（扣除手续费）
-                current_amount = (current_amount / price) * (1 - pair_fee_rate)
+                effective_price = price * (1 + self.slippage_tolerance)
+                current_amount = (current_amount / effective_price) * (1 - pair_fee_rate)
             else:
                 # 卖出时使用买一价（bids）
                 if hasattr(order_book, 'bids') and order_book.bids:
@@ -747,7 +758,8 @@ class ArbitrageEngine:
                 if price == 0:
                     return 0, -1
                 # 计算获得的数量（扣除手续费）
-                current_amount = (current_amount * price) * (1 - pair_fee_rate)
+                effective_price = price * (1 - self.slippage_tolerance)
+                current_amount = (current_amount * effective_price) * (1 - pair_fee_rate)
             
             self.logger.debug(f"{from_asset} -> {to_asset}: {direction} @ {price}, amount: {current_amount}")
         

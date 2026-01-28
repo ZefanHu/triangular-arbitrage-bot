@@ -119,7 +119,7 @@ class TradeExecutor:
         
         # 交易配置
         self.order_timeout = trading_config['parameters'].get('order_timeout', 10.0)
-        self.price_adjustment = trading_config['parameters'].get('price_adjustment', 0.001)
+        self.slippage_tolerance = trading_config['parameters'].get('slippage_tolerance', 0.0)
         self.max_retries = 3  # 保持硬编码，因为已从配置中移除
         self.min_profit_threshold = trading_config['parameters'].get('min_profit_threshold', 0.0005)
         
@@ -611,11 +611,11 @@ class TradeExecutor:
             # 计算交易数量和价格
             if direction == 'buy':
                 # 买入：用报价资产买基础资产
-                price = price_info['best_ask']  # 买入使用卖一价
+                price = price_info['best_ask'] * (1 + self.slippage_tolerance)  # 买入使用卖一价并考虑滑点
                 size = current_amount / price
             else:
                 # 卖出：卖基础资产得报价资产
-                price = price_info['best_bid']  # 卖出使用买一价
+                price = price_info['best_bid'] * (1 - self.slippage_tolerance)  # 卖出使用买一价并考虑滑点
                 size = current_amount
             
             # 创建交易对象
@@ -683,13 +683,13 @@ class TradeExecutor:
                 return price
             
             if side == 'buy':
-                # 买入：在买一价基础上稍微提高价格，提高成交概率
-                max_price = best_ask * 1.005
-                optimized_price = min(best_bid * (1 + self.price_adjustment), max_price)
+                # 买入：基于卖一价与滑点容忍度设置更激进的限价
+                min_price = best_ask * (1 + self.slippage_tolerance)
+                optimized_price = max(price, min_price)
             else:
-                # 卖出：在卖一价基础上稍微降低价格，提高成交概率
-                min_price = best_bid * 0.995
-                optimized_price = max(best_ask * (1 - self.price_adjustment), min_price)
+                # 卖出：基于买一价与滑点容忍度设置更保守的限价
+                max_price = best_bid * (1 - self.slippage_tolerance)
+                optimized_price = min(price, max_price)
             
             self.logger.debug(f"价格优化 {inst_id}: 原价 {price} -> 优化价 {optimized_price}")
             return optimized_price

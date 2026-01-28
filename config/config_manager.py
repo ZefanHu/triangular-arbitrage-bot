@@ -1,8 +1,64 @@
 import configparser
+import difflib
+import json
 import os
 import time
-import json
 from utils.logger import setup_logger
+
+
+SETTINGS_SCHEMA = {
+    'trading': {
+        'initial_usdt': {'type': float, 'default': 0.0, 'min': 0},
+        'initial_usdc': {'type': float, 'default': 0.0, 'min': 0},
+        'initial_btc': {'type': float, 'default': 0.0, 'min': 0},
+        'fee_rate': {'type': float, 'default': 0.001, 'min': 0, 'max': 1},
+        'slippage_tolerance': {'type': float, 'default': 0.002, 'min': 0, 'max': 0.02},
+        'min_profit_threshold': {'type': float, 'default': 0.003, 'min': 0, 'max': 0.05},
+        'order_timeout': {'type': float, 'default': 3.0, 'min': 0, 'max': 60, 'min_exclusive': True},
+        'min_trade_amount': {'type': float, 'default': 100.0, 'min': 0, 'min_exclusive': True},
+        'monitor_interval': {'type': float, 'default': 1.0, 'min': 0, 'max': 60, 'min_exclusive': True},
+        'enable_profit_validation': {'type': bool, 'default': False},
+        'max_profit_rate_threshold': {'type': float, 'default': 0.01, 'min': 0, 'max': 1},
+        'max_simulated_profit_rate': {'type': float, 'default': 0.005, 'min': 0, 'max': 1},
+        'max_price_spread': {'type': float, 'default': 0.02, 'min': 0, 'max': 1},
+        'max_stablecoin_spread': {'type': float, 'default': 0.005, 'min': 0, 'max': 1},
+        'stablecoin_price_range_min': {'type': float, 'default': 0.98, 'min': 0, 'max': 2},
+        'stablecoin_price_range_max': {'type': float, 'default': 1.02, 'min': 0, 'max': 2}
+    },
+    'risk': {
+        'max_position_ratio': {'type': float, 'default': 0.2, 'min': 0, 'max': 1, 'min_exclusive': True},
+        'max_single_trade_ratio': {'type': float, 'default': 0.1, 'min': 0, 'max': 1, 'min_exclusive': True},
+        'min_arbitrage_interval': {'type': float, 'default': 10.0, 'min': 0, 'max': 3600},
+        'max_daily_trades': {'type': int, 'default': 100, 'min': 1, 'max': 10000},
+        'max_daily_loss_ratio': {'type': float, 'default': 0.05, 'min': 0, 'max': 1, 'min_exclusive': True},
+        'stop_loss_ratio': {'type': float, 'default': 0.1, 'min': 0, 'max': 1, 'min_exclusive': True},
+        'network_retry_count': {'type': int, 'default': 3, 'min': 0, 'max': 10},
+        'network_retry_delay': {'type': float, 'default': 1.0, 'min': 0, 'max': 10}
+    },
+    'system': {
+        'log_level': {'type': str, 'default': 'INFO'},
+        'system_log_file': {'type': str, 'default': 'logs/system_runtime.log'},
+        'enable_trade_history': {'type': bool, 'default': True},
+        'trade_record_file': {'type': str, 'default': 'logs/trade_records.json'}
+    },
+    'api': {
+        'api_key': {'type': str, 'default': ''},
+        'secret_key': {'type': str, 'default': ''},
+        'passphrase': {'type': str, 'default': ''},
+        'flag': {'type': str, 'default': '1'}
+    }
+}
+
+DYNAMIC_KEY_RULES = {
+    'trading': {
+        'path': {'type': str},
+        'fee_rate_': {'type': float, 'min': 0, 'max': 1}
+    }
+}
+
+DEPRECATED_KEYS = {
+    ('trading', 'price_adjustment'): ('trading', 'slippage_tolerance')
+}
 
 
 class ConfigManager:
@@ -53,6 +109,10 @@ class ConfigManager:
                 self.logger.info(f"已加载密钥文件: {self.secrets_path}")
             else:
                 self.logger.info(f"密钥文件不存在，跳过加载: {self.secrets_path}")
+
+            if os.path.exists(self.settings_path):
+                self._apply_deprecated_keys()
+                self.validate_config()
                 
         except Exception as e:
             self.logger.error(f"加载配置文件失败: {e}")
@@ -149,29 +209,22 @@ class ConfigManager:
             
             trading_config = {
                 'paths': paths,
-                'initial_holdings': {
-                    'usdt': float(self.get('trading', 'initial_usdt', 0)),
-                    'usdc': float(self.get('trading', 'initial_usdc', 0)),
-                    'btc': float(self.get('trading', 'initial_btc', 0))
-                },
                 'parameters': {
-                    'rebalance_threshold': float(self.get('trading', 'rebalance_threshold', 5.0)),
-                    'fee_rate': float(self.get('trading', 'fee_rate', '0.001').split('#')[0].strip()),
-                    'slippage_tolerance': float(self.get('trading', 'slippage_tolerance', 0.002)),
-                    'min_profit_threshold': float(self.get('trading', 'min_profit_threshold', 0.003)),
-                    'order_timeout': float(self.get('trading', 'order_timeout', 3.0)),
-                    'min_trade_amount': float(self.get('trading', 'min_trade_amount', 100.0)),
-                    'monitor_interval': float(self.get('trading', 'monitor_interval', 1.0)),
-                    'price_adjustment': float(self.get('trading', 'price_adjustment', 0.001))
+                    'fee_rate': float(self._strip_inline_comment(self.get('trading', 'fee_rate', '0.001'))),
+                    'slippage_tolerance': float(self._strip_inline_comment(self.get('trading', 'slippage_tolerance', 0.002))),
+                    'min_profit_threshold': float(self._strip_inline_comment(self.get('trading', 'min_profit_threshold', 0.003))),
+                    'order_timeout': float(self._strip_inline_comment(self.get('trading', 'order_timeout', 3.0))),
+                    'min_trade_amount': float(self._strip_inline_comment(self.get('trading', 'min_trade_amount', 100.0))),
+                    'monitor_interval': float(self._strip_inline_comment(self.get('trading', 'monitor_interval', 1.0)))
                 },
                 'validation': {
-                    'enable_profit_validation': self.get('trading', 'enable_profit_validation', 'false').lower() == 'true',
-                    'max_profit_rate_threshold': float(self.get('trading', 'max_profit_rate_threshold', 0.01)),
-                    'max_simulated_profit_rate': float(self.get('trading', 'max_simulated_profit_rate', 0.005)),
-                    'max_price_spread': float(self.get('trading', 'max_price_spread', 0.02)),
-                    'max_stablecoin_spread': float(self.get('trading', 'max_stablecoin_spread', 0.005)),
-                    'stablecoin_price_range_min': float(self.get('trading', 'stablecoin_price_range_min', 0.98)),
-                    'stablecoin_price_range_max': float(self.get('trading', 'stablecoin_price_range_max', 1.02))
+                    'enable_profit_validation': self._strip_inline_comment(self.get('trading', 'enable_profit_validation', 'false')).lower() == 'true',
+                    'max_profit_rate_threshold': float(self._strip_inline_comment(self.get('trading', 'max_profit_rate_threshold', 0.01))),
+                    'max_simulated_profit_rate': float(self._strip_inline_comment(self.get('trading', 'max_simulated_profit_rate', 0.005))),
+                    'max_price_spread': float(self._strip_inline_comment(self.get('trading', 'max_price_spread', 0.02))),
+                    'max_stablecoin_spread': float(self._strip_inline_comment(self.get('trading', 'max_stablecoin_spread', 0.005))),
+                    'stablecoin_price_range_min': float(self._strip_inline_comment(self.get('trading', 'stablecoin_price_range_min', 0.98))),
+                    'stablecoin_price_range_max': float(self._strip_inline_comment(self.get('trading', 'stablecoin_price_range_max', 1.02)))
                 }
             }
             return trading_config
@@ -188,15 +241,14 @@ class ConfigManager:
         """
         try:
             risk_config = {
-                'max_position_ratio': float(self.get('risk', 'max_position_ratio', 0.2)),
-                'max_single_trade_ratio': float(self.get('risk', 'max_single_trade_ratio', 0.1)),
-                'min_arbitrage_interval': float(self.get('risk', 'min_arbitrage_interval', 10)),
-                'max_daily_trades': int(self.get('risk', 'max_daily_trades', 100)),
-                'max_daily_loss_ratio': float(self.get('risk', 'max_daily_loss_ratio', 0.05)),
-                'stop_loss_ratio': float(self.get('risk', 'stop_loss_ratio', 0.1)),
-                'balance_check_interval': float(self.get('risk', 'balance_check_interval', 60)),
-                'network_retry_count': int(self.get('risk', 'network_retry_count', 3)),
-                'network_retry_delay': float(self.get('risk', 'network_retry_delay', 1.0))
+                'max_position_ratio': self._parse_value(self.get('risk', 'max_position_ratio', 0.2), float),
+                'max_single_trade_ratio': self._parse_value(self.get('risk', 'max_single_trade_ratio', 0.1), float),
+                'min_arbitrage_interval': self._parse_value(self.get('risk', 'min_arbitrage_interval', 10), float),
+                'max_daily_trades': self._parse_value(self.get('risk', 'max_daily_trades', 100), int),
+                'max_daily_loss_ratio': self._parse_value(self.get('risk', 'max_daily_loss_ratio', 0.05), float),
+                'stop_loss_ratio': self._parse_value(self.get('risk', 'stop_loss_ratio', 0.1), float),
+                'network_retry_count': self._parse_value(self.get('risk', 'network_retry_count', 3), int),
+                'network_retry_delay': self._parse_value(self.get('risk', 'network_retry_delay', 1.0), float)
             }
             return risk_config
         except Exception as e:
@@ -212,10 +264,10 @@ class ConfigManager:
         """
         try:
             system_config = {
-                'log_level': self.get('system', 'log_level', 'INFO'),
-                'system_log_file': self.get('system', 'system_log_file', 'logs/system_runtime.log'),
-                'enable_trade_history': self.get('system', 'enable_trade_history', 'true').lower() == 'true',
-                'trade_record_file': self.get('system', 'trade_record_file', 'logs/trade_records.json')
+                'log_level': self._parse_value(self.get('system', 'log_level', 'INFO'), str),
+                'system_log_file': self._parse_value(self.get('system', 'system_log_file', 'logs/system_runtime.log'), str),
+                'enable_trade_history': self._parse_value(self.get('system', 'enable_trade_history', 'true'), bool),
+                'trade_record_file': self._parse_value(self.get('system', 'trade_record_file', 'logs/trade_records.json'), str)
             }
             return system_config
         except Exception as e:
@@ -232,7 +284,7 @@ class ConfigManager:
                 'api_key': self.get('api', 'api_key'),
                 'secret_key': self.get('api', 'secret_key'),
                 'passphrase': self.get('api', 'passphrase'),
-                'flag': self.get('api', 'flag', '1')
+                'flag': self._strip_inline_comment(self.get('api', 'flag', '1'))
             }
             
             if not all([credentials['api_key'], credentials['secret_key'], credentials['passphrase']]):
@@ -247,90 +299,145 @@ class ConfigManager:
     def validate_config(self):
         try:
             errors = []
-            
-            # 检查必要的配置项
+            unknown_keys = {}
+            parsed_values = {}
+
             required_sections = ['trading', 'system']
             for section in required_sections:
                 if not self.config.has_section(section):
                     errors.append(f"缺少配置节: [{section}]")
-            
-            # 验证交易参数
-            if self.config.has_section('trading'):
-                fee_rate_str = self.get('trading', 'fee_rate', '0.001')
-                # 处理可能包含注释的配置值
-                fee_rate_str = fee_rate_str.split('#')[0].strip()
-                fee_rate = float(fee_rate_str)
-                if not (0 <= fee_rate <= 1):
-                    errors.append("fee_rate必须在0-1之间")
-                
-                # 验证交易对特定手续费率
-                for key in self.config['trading']:
-                    if key.startswith('fee_rate_') and key != 'fee_rate':
-                        try:
-                            pair_fee_str = self.get('trading', key, '0')
-                            # 处理可能包含注释的配置值
-                            pair_fee_str = pair_fee_str.split('#')[0].strip()
-                            pair_fee = float(pair_fee_str)
-                            if not (0 <= pair_fee <= 1):
-                                errors.append(f"{key}必须在0-1之间")
-                        except ValueError:
-                            errors.append(f"{key}必须是有效的数字")
-                
-                slippage_tolerance = float(self.get('trading', 'slippage_tolerance', 0.002))
-                if not (0 <= slippage_tolerance <= 1):
-                    errors.append("slippage_tolerance必须在0-1之间")
-                
-                min_profit_threshold = float(self.get('trading', 'min_profit_threshold', 0.003))
-                if min_profit_threshold < 0:
-                    errors.append("min_profit_threshold必须大于等于0")
-                
-                order_timeout = float(self.get('trading', 'order_timeout', 3.0))
-                if order_timeout <= 0:
-                    errors.append("order_timeout必须大于0")
-                
-                min_trade_amount = float(self.get('trading', 'min_trade_amount', 100.0))
-                if min_trade_amount <= 0:
-                    errors.append("min_trade_amount必须大于0")
-            
-            # 验证风险管理参数
-            if self.config.has_section('risk'):
-                max_position_ratio = float(self.get('risk', 'max_position_ratio', 0.2))
-                if not (0 < max_position_ratio <= 1):
-                    errors.append("max_position_ratio必须在0-1之间")
-                
-                max_single_trade_ratio = float(self.get('risk', 'max_single_trade_ratio', 0.1))
-                if not (0 < max_single_trade_ratio <= 1):
-                    errors.append("max_single_trade_ratio必须在0-1之间")
-                
-                if max_single_trade_ratio > max_position_ratio:
+
+            for section in self.config.sections():
+                if section not in SETTINGS_SCHEMA:
+                    errors.append(f"未知配置节: [{section}]")
+                    continue
+
+                parsed_values[section] = {}
+                schema = SETTINGS_SCHEMA[section]
+                dynamic_rules = DYNAMIC_KEY_RULES.get(section, {})
+
+                for key, raw_value in self.config.items(section):
+                    if key in schema:
+                        spec = schema[key]
+                    else:
+                        spec = None
+                        for prefix, rule_spec in dynamic_rules.items():
+                            if key.startswith(prefix):
+                                spec = rule_spec
+                                break
+                        if spec is None:
+                            unknown_keys.setdefault(section, []).append(key)
+                            continue
+
+                    try:
+                        value = self._parse_value(raw_value, spec['type'])
+                        self._validate_value_range(section, key, value, spec, raw_value)
+                    except ValueError as e:
+                        errors.append(f"[{section}] {key}={raw_value} 无效: {e}")
+                        continue
+                    parsed_values[section][key] = value
+
+            if unknown_keys:
+                for section, keys in unknown_keys.items():
+                    allowed_keys = list(SETTINGS_SCHEMA.get(section, {}).keys())
+                    allowed_keys.extend(f"{prefix}*" for prefix in DYNAMIC_KEY_RULES.get(section, {}).keys())
+                    for key in keys:
+                        suggestion = difflib.get_close_matches(key, allowed_keys, n=1)
+                        if suggestion:
+                            errors.append(f"未知配置项: [{section}] {key}，你可能想写: {suggestion[0]}")
+                        else:
+                            errors.append(f"未知配置项: [{section}] {key}")
+
+            risk_values = parsed_values.get('risk', {})
+            if 'max_single_trade_ratio' in risk_values and 'max_position_ratio' in risk_values:
+                if risk_values['max_single_trade_ratio'] > risk_values['max_position_ratio']:
                     errors.append("max_single_trade_ratio不能大于max_position_ratio")
-                
-                min_arbitrage_interval = float(self.get('risk', 'min_arbitrage_interval', 10))
-                if min_arbitrage_interval < 0:
-                    errors.append("min_arbitrage_interval必须大于等于0")
-                
-                max_daily_trades = int(self.get('risk', 'max_daily_trades', 100))
-                if max_daily_trades <= 0:
-                    errors.append("max_daily_trades必须大于0")
-                
-                max_daily_loss_ratio = float(self.get('risk', 'max_daily_loss_ratio', 0.05))
-                if not (0 < max_daily_loss_ratio <= 1):
-                    errors.append("max_daily_loss_ratio必须在0-1之间")
-                
-                stop_loss_ratio = float(self.get('risk', 'stop_loss_ratio', 0.1))
-                if not (0 < stop_loss_ratio <= 1):
-                    errors.append("stop_loss_ratio必须在0-1之间")
-            
+
+            trading_values = parsed_values.get('trading', {})
+            if 'stablecoin_price_range_min' in trading_values and 'stablecoin_price_range_max' in trading_values:
+                if trading_values['stablecoin_price_range_min'] > trading_values['stablecoin_price_range_max']:
+                    errors.append("stablecoin_price_range_min不能大于stablecoin_price_range_max")
+
             if errors:
-                self.logger.error(f"配置验证失败: {', '.join(errors)}")
-                return False, errors
-            else:
-                self.logger.info("配置验证通过")
-                return True, []
+                message = f"配置验证失败: {', '.join(errors)}"
+                self.logger.error(message)
+                raise ValueError(message)
+
+            self.logger.info("配置验证通过")
+            return True, []
                 
         except Exception as e:
             self.logger.error(f"配置验证异常: {e}")
-            return False, [f"验证过程中发生异常: {e}"]
+            raise
+
+    def _apply_deprecated_keys(self) -> None:
+        for (section, key), (target_section, target_key) in DEPRECATED_KEYS.items():
+            if not self.config.has_section(section) or not self.config.has_option(section, key):
+                continue
+            value = self._strip_inline_comment(self.config.get(section, key))
+            if not self.config.has_section(target_section):
+                self.config.add_section(target_section)
+            if not self.config.has_option(target_section, target_key):
+                self.config.set(target_section, target_key, value)
+            self.logger.warning(f"配置项 [{section}] {key} 已弃用，已映射至 [{target_section}] {target_key}")
+            self.config.remove_option(section, key)
+
+    def _strip_inline_comment(self, value: str) -> str:
+        if value is None:
+            return value
+        if not isinstance(value, str):
+            value = str(value)
+        for marker in ['#', ';']:
+            if marker in value:
+                value = value.split(marker)[0]
+        return value.strip()
+
+    def _parse_value(self, raw_value: str, expected_type: type):
+        value = self._strip_inline_comment(raw_value)
+        if expected_type is bool:
+            if isinstance(value, bool):
+                return value
+            normalized = str(value).strip().lower()
+            if normalized in ['true', '1', 'yes', 'on']:
+                return True
+            if normalized in ['false', '0', 'no', 'off']:
+                return False
+            raise ValueError(f"无法解析布尔值: {raw_value}")
+        if expected_type is int:
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                raise ValueError(f"无法解析整数: {raw_value}")
+            if not numeric.is_integer():
+                raise ValueError(f"整数格式无效: {raw_value}")
+            return int(numeric)
+        if expected_type is float:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                raise ValueError(f"无法解析浮点数: {raw_value}")
+        if expected_type is str:
+            return str(value)
+        return value
+
+    def _validate_value_range(self, section: str, key: str, value, spec: dict, raw_value: str) -> None:
+        if not isinstance(value, (int, float)):
+            return
+        min_value = spec.get('min', None)
+        max_value = spec.get('max', None)
+        min_exclusive = spec.get('min_exclusive', False)
+        max_exclusive = spec.get('max_exclusive', False)
+
+        if min_value is not None:
+            if min_exclusive and not value > min_value:
+                raise ValueError(f"{key}必须大于{min_value}，当前值: {raw_value}")
+            if not min_exclusive and not value >= min_value:
+                raise ValueError(f"{key}必须大于等于{min_value}，当前值: {raw_value}")
+        if max_value is not None:
+            if max_exclusive and not value < max_value:
+                raise ValueError(f"{key}必须小于{max_value}，当前值: {raw_value}")
+            if not max_exclusive and not value <= max_value:
+                raise ValueError(f"{key}必须小于等于{max_value}，当前值: {raw_value}")
     
     def reload_config(self):
         """重新加载配置文件，保留API凭据"""
@@ -345,6 +452,8 @@ class ConfigManager:
             if os.path.exists(self.settings_path):
                 self.config.read(self.settings_path, encoding='utf-8')
                 self.logger.info(f"已重新加载配置文件: {self.settings_path}")
+                self._apply_deprecated_keys()
+                self.validate_config()
             
             # 恢复API凭据（如果存在）
             if api_credentials:
