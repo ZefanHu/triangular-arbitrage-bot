@@ -134,6 +134,51 @@ class TradeExecutor:
         self.trade_records: List[ArbitrageRecord] = []
         
         self.logger.info("交易执行器初始化完成")
+
+    @staticmethod
+    def _parse_inst_id(inst_id: str) -> Tuple[str, str]:
+        # TODO: 当前仅支持现货 inst_id 的 base-quote 两段格式。
+        parts = inst_id.split('-')
+        if len(parts) != 2 or not parts[0] or not parts[1]:
+            raise ValueError(f"无效交易对ID: {inst_id}")
+        return parts[0], parts[1]
+
+    @staticmethod
+    def _input_output_assets(inst_id: str, side: str) -> Tuple[str, str]:
+        base, quote = TradeExecutor._parse_inst_id(inst_id)
+        if side == 'buy':
+            return quote, base
+        if side == 'sell':
+            return base, quote
+        raise ValueError(f"未知交易方向: {side}")
+
+    @staticmethod
+    def _calc_output_amount(inst_id: str, side: str, result: TradeResult) -> Tuple[str, float]:
+        # TODO: 目前未将成交手续费纳入输出数量计算。
+        if not result.success:
+            raise ValueError("交易未成功，无法计算输出数量")
+        if result.filled_size <= 0:
+            raise ValueError("成交数量无效，无法计算输出数量")
+        base, quote = TradeExecutor._parse_inst_id(inst_id)
+        if side == 'buy':
+            return base, result.filled_size
+        if side == 'sell':
+            if result.avg_price <= 0:
+                raise ValueError("成交均价无效，无法计算输出数量")
+            return quote, result.filled_size * result.avg_price
+        raise ValueError(f"未知交易方向: {side}")
+
+    @staticmethod
+    def _calc_order_size(inst_id: str, side: str, price: float, input_amount: float) -> float:
+        if input_amount <= 0:
+            raise ValueError("输入资产数量无效，无法计算订单数量")
+        if side == 'buy':
+            if price <= 0:
+                raise ValueError("价格无效，无法计算买入数量")
+            return input_amount / price
+        if side == 'sell':
+            return input_amount
+        raise ValueError(f"未知交易方向: {side}")
     
     def execute_arbitrage(self, opportunity: ArbitrageOpportunity, 
                          investment_amount: float) -> Dict[str, any]:
@@ -204,25 +249,66 @@ class TradeExecutor:
             
             # 按顺序执行三笔交易
             trade_results = []
+            start_asset = opportunity.path.get_start_asset()
+            current_asset = start_asset
             current_amount = investment_amount
             
             for i, trade in enumerate(trades):
                 self.logger.info(f"=== 执行第 {i+1} 笔交易 ===")
-                self.logger.info(f"交易详情: {trade.inst_id} {trade.side} {trade.size} @ {trade.price}")
-                
-                # 根据实际资产数量调整交易数量
-                if i > 0:
-                    # 使用上一笔交易的成交结果
-                    prev_result = trade_results[-1]
-                    if prev_result.success and prev_result.filled_size > 0:
-                        # 更新交易数量
-                        if trade.side == 'buy':
-                            # 买入：用上一笔交易得到的资产数量
-                            trade.size = prev_result.filled_size * prev_result.avg_price / trade.price
-                        else:
-                            # 卖出：直接使用上一笔交易的成交数量
-                            trade.size = prev_result.filled_size
-                        self.logger.info(f"根据上一笔交易结果调整数量: {trade.size}")
+                self.logger.info(
+                    f"当前持有资产: {current_asset} 数量: {current_amount}"
+                )
+
+                try:
+                    input_asset, output_asset = self._input_output_assets(trade.inst_id, trade.side)
+                except ValueError as exc:
+                    self.logger.error(f"解析交易对或方向失败: {exc}")
+                    record.success = False
+                    record.end_time = datetime.now().timestamp()
+                    self.trade_records.append(record)
+                    return {
+                        'success': False,
+                        'error': f'解析交易对或方向失败: {exc}',
+                        'trades': trade_results
+                    }
+
+                if current_asset != input_asset:
+                    self.logger.error(
+                        "资产连续性校验失败: 期望输入资产=%s 实际持有资产=%s 路径=%s",
+                        input_asset,
+                        current_asset,
+                        opportunity.path
+                    )
+                    record.success = False
+                    record.end_time = datetime.now().timestamp()
+                    self.trade_records.append(record)
+                    return {
+                        'success': False,
+                        'error': '资产连续性校验失败，停止执行后续交易',
+                        'trades': trade_results
+                    }
+
+                try:
+                    trade.size = self._calc_order_size(
+                        trade.inst_id,
+                        trade.side,
+                        trade.price,
+                        current_amount
+                    )
+                except ValueError as exc:
+                    self.logger.error(f"计算订单数量失败: {exc}")
+                    record.success = False
+                    record.end_time = datetime.now().timestamp()
+                    self.trade_records.append(record)
+                    return {
+                        'success': False,
+                        'error': f'计算订单数量失败: {exc}',
+                        'trades': trade_results
+                    }
+
+                self.logger.info(
+                    f"交易详情: {trade.inst_id} {trade.side} {trade.size} @ {trade.price}"
+                )
                 
                 # 执行单笔交易
                 result = self._execute_single_trade_with_safety(trade.inst_id, trade.side, trade.size, trade.price)
@@ -240,6 +326,27 @@ class TradeExecutor:
                     }
                 
                 self.logger.info(f"第 {i+1} 笔交易成功: 成交量 {result.filled_size}, 平均价 {result.avg_price}")
+
+                try:
+                    output_asset, output_amount = self._calc_output_amount(
+                        trade.inst_id,
+                        trade.side,
+                        result
+                    )
+                except ValueError as exc:
+                    self.logger.error(f"计算输出资产数量失败: {exc}")
+                    self._handle_trade_failure(record, i, result)
+                    return {
+                        'success': False,
+                        'error': f'计算输出资产数量失败: {exc}',
+                        'trades': trade_results
+                    }
+
+                self.logger.info(
+                    f"交易完成资产流转: 输出资产={output_asset} 输出数量={output_amount}"
+                )
+                current_asset = output_asset
+                current_amount = output_amount
                 
                 # 交易后处理
                 self._post_trade_processing(trade, result)
@@ -250,7 +357,23 @@ class TradeExecutor:
                     time.sleep(0.1)
             
             # 计算实际利润
-            final_amount = trade_results[-1].filled_size * trade_results[-1].avg_price if trade_results else 0
+            if current_asset != start_asset:
+                self.logger.error(
+                    "套利闭环校验失败: 起始资产=%s 最终资产=%s 路径=%s",
+                    start_asset,
+                    current_asset,
+                    opportunity.path
+                )
+                record.success = False
+                record.end_time = datetime.now().timestamp()
+                self.trade_records.append(record)
+                return {
+                    'success': False,
+                    'error': '套利闭环校验失败，最终资产不匹配',
+                    'trades': trade_results
+                }
+
+            final_amount = current_amount
             actual_profit = final_amount - investment_amount
             actual_profit_rate = actual_profit / investment_amount if investment_amount > 0 else 0
             
