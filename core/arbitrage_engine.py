@@ -242,6 +242,30 @@ class ArbitrageEngine:
         Returns:
             套利机会列表，每个元素包含路径、利润率、交易量等信息
         """
+        def _sanitize_trade_steps(trade_steps: Optional[List[Dict]]) -> List[Dict[str, str]]:
+            if not trade_steps:
+                return []
+
+            sanitized_steps = []
+            for step in trade_steps:
+                if not isinstance(step, dict):
+                    return []
+                pair = step.get('pair')
+                if not pair:
+                    return []
+                action = step.get('action') or step.get('direction')
+                if not action:
+                    return []
+                action = str(action).lower()
+                if action not in {'buy', 'sell'}:
+                    return []
+                sanitized_steps.append({
+                    'pair': str(pair).upper(),
+                    'action': action
+                })
+
+            return sanitized_steps
+
         opportunities = []
         
         # 更新统计
@@ -307,7 +331,8 @@ class ArbitrageEngine:
                     'min_trade_amount': opportunity.min_trade_amount,
                     'max_trade_amount': opportunity.max_trade_amount,
                     'estimated_profit': opportunity.estimated_profit,
-                    'timestamp': opportunity.timestamp
+                    'timestamp': opportunity.timestamp,
+                    'trade_steps': _sanitize_trade_steps(opportunity.trade_steps)
                 }
                 opportunities.append(opportunity_dict)
                 
