@@ -431,7 +431,8 @@ class TradingController:
                     path=arbitrage_path,
                     profit_rate=opportunity['profit_rate'],
                     min_amount=opportunity['min_trade_amount'],
-                    timestamp=opportunity['timestamp']
+                    timestamp=opportunity['timestamp'],
+                    trade_steps=opportunity.get('trade_steps')
                 )
                 
                 # 3. 风险检查（包括频率限制）

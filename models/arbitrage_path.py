@@ -5,7 +5,7 @@
 """
 
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 
 
@@ -221,6 +221,10 @@ class ArbitrageOpportunity:
         Returns:
             交易对列表
         """
+        step_data = self._get_step_pairs_and_directions()
+        if step_data:
+            pairs, _ = step_data
+            return pairs
         return self.path.get_trading_pairs()
     
     def get_trade_directions(self) -> List[str]:
@@ -230,7 +234,40 @@ class ArbitrageOpportunity:
         Returns:
             交易方向列表
         """
+        step_data = self._get_step_pairs_and_directions()
+        if step_data:
+            _, directions = step_data
+            return directions
         return self.path.get_trade_directions()
+
+    def _get_step_pairs_and_directions(self) -> Optional[Tuple[List[str], List[str]]]:
+        """
+        从trade_steps解析交易对与方向，解析失败返回None
+        """
+        if not self.trade_steps:
+            return None
+
+        pairs = []
+        directions = []
+        for step in self.trade_steps:
+            if not isinstance(step, dict):
+                return None
+            pair = step.get('pair')
+            if not pair:
+                return None
+            action = step.get('action') or step.get('direction')
+            if not action:
+                return None
+            action = str(action).lower()
+            if action not in {'buy', 'sell'}:
+                return None
+            pairs.append(str(pair).upper())
+            directions.append(action)
+
+        if not pairs or len(pairs) != len(directions):
+            return None
+
+        return pairs, directions
     
     def is_expired(self, max_age_seconds: float = 5.0) -> bool:
         """
