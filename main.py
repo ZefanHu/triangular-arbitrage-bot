@@ -117,22 +117,24 @@ class TradingBot:
             padding=(1, 2)
         ))
     
-    async def check_environment(self) -> bool:
+    async def check_environment(self, mode: str) -> bool:
         """Check runtime environment"""
         self.console.print("\n[bold]Checking runtime environment...[/bold]")
         
         checks = []
+        api_ok = False
         
         # Check configuration files
         try:
-            api_key = self.config_manager.get('api', 'api_key')
-            secret_key = self.config_manager.get('api', 'secret_key')
-            passphrase = self.config_manager.get('api', 'passphrase')
-            
-            if all([api_key, secret_key, passphrase]):
-                checks.append(("API Config", True, "Configured"))
+            credentials = self.config_manager.get_api_credentials()
+            api_ok = bool(credentials)
+            if mode == "auto":
+                passed = api_ok
+                detail = "Configured" if api_ok else "Not configured (required for Auto)"
             else:
-                checks.append(("API Config", False, "Not configured"))
+                passed = True
+                detail = "Configured" if api_ok else "Not configured (Monitor OK: public-only / trading disabled)"
+            checks.append(("API Config", passed, detail))
         except Exception as e:
             checks.append(("API Config", False, str(e)))
         
@@ -169,8 +171,18 @@ class TradingBot:
         self.console.print(table)
         
         if not all_passed:
+            if mode == "auto" and not api_ok:
+                self.console.print(
+                    "\n[red]Auto mode requires API credentials. "
+                    "Please configure config/secrets.ini (see config/secrets.ini.example).[/red]"
+                )
             self.console.print("\n[red]Environment check failed, please check configuration and try again[/red]")
             return False
+
+        if mode == "monitor" and not api_ok:
+            self.console.print(
+                "\n[yellow]API 凭据缺失：系统将以 public-only 运行，余额/私有频道不可用，交易已禁用[/yellow]"
+            )
         
         self.console.print("\n[green]✅ Environment check passed[/green]")
         return True
@@ -862,12 +874,12 @@ class TradingBot:
             # Show welcome screen
             self.show_welcome()
             
-            # Check environment
-            if not await self.check_environment():
-                return
-            
             # Select running mode
             mode = self.select_mode()
+
+            # Check environment
+            if not await self.check_environment(mode):
+                return
             
             # Initialize system
             if not await self.initialize_system(mode):
