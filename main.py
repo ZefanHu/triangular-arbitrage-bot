@@ -136,7 +136,10 @@ class TradingBot:
                 detail = "Configured" if api_ok else "Not configured (Monitor OK: public-only / trading disabled)"
             checks.append(("API Config", passed, detail))
         except Exception as e:
-            checks.append(("API Config", False, str(e)))
+            if mode == "auto":
+                checks.append(("API Config", False, str(e)))
+            else:
+                checks.append(("API Config", True, f"{e} (Monitor OK: public-only / trading disabled)"))
         
         # Check trading configuration
         try:
