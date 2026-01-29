@@ -137,6 +137,7 @@ class TradeExecutor:
 
     @staticmethod
     def _parse_inst_id(inst_id: str) -> Tuple[str, str]:
+        # TODO: 当前仅支持现货 inst_id 的 base-quote 两段格式。
         parts = inst_id.split('-')
         if len(parts) != 2 or not parts[0] or not parts[1]:
             raise ValueError(f"无效交易对ID: {inst_id}")
@@ -153,6 +154,7 @@ class TradeExecutor:
 
     @staticmethod
     def _calc_output_amount(inst_id: str, side: str, result: TradeResult) -> Tuple[str, float]:
+        # TODO: 目前未将成交手续费纳入输出数量计算。
         if not result.success:
             raise ValueError("交易未成功，无法计算输出数量")
         if result.filled_size <= 0:
