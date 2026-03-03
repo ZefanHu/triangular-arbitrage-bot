@@ -865,11 +865,11 @@ class WebSocketManager:
                     currency = detail.get('ccy', '').upper()
                     # 使用availBal（可用余额）
                     available = float(detail.get('availBal', 0))
-                    if currency in ['USDT', 'USDC', 'BTC']:
+                    if currency in ['USDT', 'BTC', 'ETH']:
                         balances[currency] = available
             
             # 确保包含所有需要的币种
-            for currency in ['USDT', 'USDC', 'BTC']:
+            for currency in ['USDT', 'BTC', 'ETH']:
                 if currency not in balances:
                     balances[currency] = 0.0
             

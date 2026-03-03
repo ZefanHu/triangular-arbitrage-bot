@@ -499,7 +499,7 @@ class TradingBot:
             price_table.add_column("Spread", style="yellow", justify="right")
             
             # Use only arbitrage-related trading pairs
-            key_pairs = sorted(list(self.arbitrage_pairs)) if self.arbitrage_pairs else ['BTC-USDT', 'BTC-USDC', 'USDT-USDC']
+            key_pairs = sorted(list(self.arbitrage_pairs)) if self.arbitrage_pairs else ['BTC-USDT', 'ETH-USDT', 'ETH-BTC']
             
             for pair in key_pairs:
                 orderbook = self.trading_controller.data_collector.get_orderbook(pair)
@@ -635,6 +635,7 @@ class TradingBot:
             initial_usdt = float(self.config_manager.get('trading', 'initial_usdt', default=0) or 0)
             initial_usdc = float(self.config_manager.get('trading', 'initial_usdc', default=0) or 0)
             initial_btc = float(self.config_manager.get('trading', 'initial_btc', default=0) or 0)
+            initial_eth = float(self.config_manager.get('trading', 'initial_eth', default=0) or 0)
             
             if self.trading_controller.trade_executor:
                 # Refresh balance every 2 seconds to balance real-time data with API limits
@@ -643,11 +644,12 @@ class TradingBot:
                 usdt_balance = balances.get("USDT", 0)
                 usdc_balance = balances.get("USDC", 0)
                 btc_balance = balances.get("BTC", 0)
+                eth_balance = balances.get("ETH", 0)
                 
                 # Display with proper precision matching OKX API
                 # USDT & USDC: 5 decimal places (stablecoins), BTC: 8 decimal places
                 balance_table.add_row("USDT", f"{usdt_balance:.5f}")
-                balance_table.add_row("USDC", f"{usdc_balance:.5f}")  # Same precision as USDT
+                balance_table.add_row("ETH", f"{eth_balance:.6f}")
                 balance_table.add_row("BTC", f"{btc_balance:.8f}")
                 
                 # Calculate total profit based on USDT change only
@@ -661,17 +663,17 @@ class TradingBot:
                 balance_table.add_row("Total Profit", f"[{profit_color}]{total_profit_usdt:+.5f} USDT[/{profit_color}]")
                 
                 # Optionally show other currency changes for monitoring (should be minimal in triangular arbitrage)
-                profit_usdc = usdc_balance - initial_usdc
+                profit_eth = eth_balance - initial_eth
                 profit_btc = btc_balance - initial_btc
-                
+
                 # Only show details if there are significant deviations (which might indicate issues)
-                if abs(profit_usdc) > 0.1 or abs(profit_btc) > 0.00001:
+                if abs(profit_eth) > 0.001 or abs(profit_btc) > 0.00001:
                     balance_table.add_row("", "")
                     balance_table.add_row("[dim]Deviations:[/dim]", "")
-                    
-                    if abs(profit_usdc) > 0.1:
-                        deviation_color = "yellow" if abs(profit_usdc) < 1 else "red"
-                        balance_table.add_row("  USDC", f"[{deviation_color}]{profit_usdc:+.5f}[/{deviation_color}]")
+
+                    if abs(profit_eth) > 0.001:
+                        deviation_color = "yellow" if abs(profit_eth) < 0.01 else "red"
+                        balance_table.add_row("  ETH", f"[{deviation_color}]{profit_eth:+.6f}[/{deviation_color}]")
                     
                     if abs(profit_btc) > 0.00001:
                         deviation_color = "yellow" if abs(profit_btc) < 0.0001 else "red"
@@ -806,14 +808,14 @@ class TradingBot:
             
             # If no pairs found, use default
             if not self.arbitrage_pairs:
-                self.arbitrage_pairs = {'BTC-USDT', 'BTC-USDC', 'USDT-USDC'}
+                self.arbitrage_pairs = {'BTC-USDT', 'ETH-USDT', 'ETH-BTC'}
             
             self.logger.info(f"Extracted arbitrage pairs: {self.arbitrage_pairs}")
             
         except Exception as e:
             self.logger.error(f"Error extracting arbitrage pairs: {e}")
             # Use default pairs
-            self.arbitrage_pairs = {'BTC-USDT', 'BTC-USDC', 'USDT-USDC'}
+            self.arbitrage_pairs = {'BTC-USDT', 'ETH-USDT', 'ETH-BTC'}
     
     async def stop_trading(self):
         """Stop trading system"""

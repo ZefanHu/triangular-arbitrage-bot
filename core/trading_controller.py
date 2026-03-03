@@ -477,7 +477,7 @@ class TradingController:
                     self.stats.last_trade_time = time.time()
                 
                 # 执行交易
-                result = self.trade_executor.execute_arbitrage(arb_opportunity, trade_amount)
+                result = await asyncio.to_thread(self.trade_executor.execute_arbitrage, arb_opportunity, trade_amount)
                 
                 # 5. 记录结果
                 self._log_trade_result(arb_opportunity, result)
@@ -679,14 +679,11 @@ class TradingController:
                     else:
                         pairs.add(f"{asset1}-{asset2}")
         
-        # 添加默认交易对 - 使用OKX实际支持的交易对
-        default_pairs = [
-            'BTC-USDT', 'ETH-USDT', 'ETH-BTC', 'USDC-USDT'
-        ]
-        for pair in default_pairs:
-            pairs.add(pair)
-        
-        return list(pairs)
+        # 配置即真相：不注入默认交易对，避免下架品种导致无意义订阅
+        if not pairs:
+            self.logger.warning("未从配置中解析到任何交易对，请检查 settings.ini 的 path* 配置")
+            pairs = {'BTC-USDT', 'ETH-USDT', 'ETH-BTC'}
+        return sorted(pairs)
     
     def _is_major_crypto(self, asset: str) -> bool:
         """判断是否为主流加密货币"""

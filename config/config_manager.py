@@ -11,6 +11,7 @@ SETTINGS_SCHEMA = {
         'initial_usdt': {'type': float, 'default': 0.0, 'min': 0},
         'initial_usdc': {'type': float, 'default': 0.0, 'min': 0},
         'initial_btc': {'type': float, 'default': 0.0, 'min': 0},
+        'initial_eth': {'type': float, 'default': 0.0, 'min': 0},
         'fee_rate': {'type': float, 'default': 0.001, 'min': 0, 'max': 1},
         'slippage_tolerance': {'type': float, 'default': 0.002, 'min': 0, 'max': 0.02},
         'min_profit_threshold': {'type': float, 'default': 0.003, 'min': 0, 'max': 0.05},
