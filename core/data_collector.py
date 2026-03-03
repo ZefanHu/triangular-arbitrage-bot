@@ -153,6 +153,8 @@ class DataCollector:
             if self.balance_update_callback:
                 self.ws_manager.set_balance_update_callback(self.balance_update_callback)
             
+            self.is_running = True  # 先置 True，确保后台 loop 不会立即退出
+
             # 启动定期同步任务
             self.sync_task = asyncio.create_task(self._balance_sync_loop())
             
@@ -170,7 +172,6 @@ class DataCollector:
                 self.stats['start_time'] = time.time()
                 self.error_count_reset_time = time.time()
             
-            self.is_running = True
             self.logger.info(f"数据采集器启动成功，已订阅 {len(trading_pairs)} 个交易对")
             
             return True
