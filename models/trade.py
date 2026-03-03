@@ -59,6 +59,8 @@ class TradeResult:
     error_message: Optional[str] = None
     timestamp: float = field(default_factory=lambda: datetime.now().timestamp())
     execution_time: float = 0.0
+    fee: float = 0.0
+    fee_currency: str = ""
 
 
 @dataclass

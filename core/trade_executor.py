@@ -154,18 +154,33 @@ class TradeExecutor:
 
     @staticmethod
     def _calc_output_amount(inst_id: str, side: str, result: TradeResult) -> Tuple[str, float]:
-        # TODO: 目前未将成交手续费纳入输出数量计算。
+        """计算交易净输出资产和数量（已扣除 OKX 实际手续费）"""
         if not result.success:
             raise ValueError("交易未成功，无法计算输出数量")
         if result.filled_size <= 0:
             raise ValueError("成交数量无效，无法计算输出数量")
+
         base, quote = TradeExecutor._parse_inst_id(inst_id)
+
+        # OKX fee 为负数（如 -0.0001），用 abs() 转正后显式减去，
+        # 避免因符号方向不同导致"反向加钱"
+        fee_abs = abs(result.fee) if result.fee else 0.0
+        fee_ccy = (result.fee_currency or "").upper()
+
         if side == 'buy':
-            return base, result.filled_size
+            # 买入 base：到手 = filled_size - fee（当 fee 扣在 base 上时）
+            gross = result.filled_size
+            net = gross - fee_abs if fee_ccy == base.upper() else gross
+            return base, net
+
         if side == 'sell':
+            # 卖出 base 得 quote：到手 = filled_size * avg_price - fee（当 fee 扣在 quote 上时）
             if result.avg_price <= 0:
                 raise ValueError("成交均价无效，无法计算输出数量")
-            return quote, result.filled_size * result.avg_price
+            gross_quote = result.filled_size * result.avg_price
+            net = gross_quote - fee_abs if fee_ccy == quote.upper() else gross_quote
+            return quote, net
+
         raise ValueError(f"未知交易方向: {side}")
 
     @staticmethod
@@ -594,7 +609,9 @@ class TradeExecutor:
                         success=True,
                         order_id=order_id,
                         filled_size=filled_size,
-                        avg_price=avg_price if avg_price else 0
+                        avg_price=avg_price if avg_price else 0,
+                        fee=float(order_status.get("fee", 0) or 0),
+                        fee_currency=str(order_status.get("fee_currency", "") or "")
                     )
                 elif state == 'partially_filled':
                     self.logger.info(f"订单 {order_id} 部分成交: {filled_size}")
