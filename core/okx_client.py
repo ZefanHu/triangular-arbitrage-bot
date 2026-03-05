@@ -1,9 +1,11 @@
 from typing import Dict, Any, Optional, List, Union
+from decimal import Decimal
 from utils.logger import setup_logger
 import json
 import okex.Account_api as Account
 import okex.Market_api as Market
 import okex.Trade_api as Trade
+import okex.Public_api as Public
 from config.config_manager import ConfigManager
 from models.order_book import OrderBook
 
@@ -49,13 +51,25 @@ class OKXClient:
             )
         
         self.market_api = Market.MarketAPI(
-            self.api_key, 
-            self.secret_key, 
-            self.passphrase, 
-            False, 
+            self.api_key,
+            self.secret_key,
+            self.passphrase,
+            False,
             self.flag
         )
-        
+
+        self.public_api = Public.PublicAPI(
+            self.api_key,
+            self.secret_key,
+            self.passphrase,
+            False,
+            self.flag
+        )
+
+        # 交易对精度规则缓存
+        self.instrument_rules: Dict[str, Dict[str, Decimal]] = {}
+        self._load_instrument_rules()
+
         if not self.public_only:
             self.trade_api = Trade.TradeAPI(
                 self.api_key, 
@@ -66,7 +80,42 @@ class OKXClient:
             )
         
         self.logger.info(f"OKX客户端初始化完成，使用{'模拟盘' if self.flag == '1' else '实盘'}")
-    
+
+    def _load_instrument_rules(self):
+        """
+        加载所有现货交易对的精度规则（lotSz/minSz/tickSz）
+
+        失败时仅记录警告，不阻塞系统启动。
+        """
+        try:
+            result = self.public_api.get_instruments(instType='SPOT')
+            if not result or 'data' not in result:
+                self.logger.warning("获取交易对精度规则失败：返回数据为空")
+                return
+            for item in result['data']:
+                inst_id = item.get('instId', '')
+                if inst_id:
+                    self.instrument_rules[inst_id] = {
+                        'lotSz': Decimal(item['lotSz']),
+                        'minSz': Decimal(item['minSz']),
+                        'tickSz': Decimal(item['tickSz']),
+                    }
+            self.logger.info(f"加载 {len(self.instrument_rules)} 个交易对精度规则")
+        except Exception as e:
+            self.logger.warning(f"加载交易对精度规则失败: {e}")
+
+    def get_instrument_rule(self, inst_id: str) -> Optional[Dict[str, Decimal]]:
+        """
+        获取指定交易对的精度规则
+
+        Args:
+            inst_id: 产品ID，如BTC-USDT
+
+        Returns:
+            精度规则字典 {'lotSz': ..., 'minSz': ..., 'tickSz': ...}，不存在则返回None
+        """
+        return self.instrument_rules.get(inst_id)
+
     def get_balance(self) -> Optional[Dict[str, float]]:
         """
         获取账户余额信息

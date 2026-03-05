@@ -117,6 +117,10 @@ class TradingController:
             # 注意：不再使用回调模式，直接在交易循环中获取套利机会
             # 这样可以更好地控制交易流程和时机
             
+            # 非只读模式下启用严格数据检查
+            if not self.read_only_mode:
+                self.arbitrage_engine.set_strict_data_check(True)
+
             # 套利引擎不需要启动监控，直接在交易循环中调用find_opportunities()
             self.logger.info("套利引擎已就绪，使用同步模式")
             

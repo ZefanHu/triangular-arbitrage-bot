@@ -41,6 +41,9 @@ class ArbitrageEngine:
         self.stablecoin_price_range_min = float(self.config_manager.get('trading', 'stablecoin_price_range_min', 0.98))
         self.stablecoin_price_range_max = float(self.config_manager.get('trading', 'stablecoin_price_range_max', 1.02))
         
+        # 是否强制执行数据一致性检查（自动交易模式下应为 True）
+        self.strict_data_check = False
+
         # 监控相关
         self.monitor_interval = float(self.config_manager.get('trading', 'monitor_interval', 1.0))
         self.is_monitoring = False
@@ -73,6 +76,11 @@ class ArbitrageEngine:
             self.logger.info(f"  稳定币最大价差: {self.max_stablecoin_spread:.2%}")
             self.logger.info(f"  稳定币价格范围: {self.stablecoin_price_range_min}-{self.stablecoin_price_range_max}")
     
+    def set_strict_data_check(self, enabled: bool):
+        """启用/禁用严格数据一致性检查"""
+        self.strict_data_check = enabled
+        self.logger.info(f"数据一致性检查: {'启用' if enabled else '禁用'}")
+
     def _get_trading_pair(self, asset1: str, asset2: str) -> Tuple[str, str]:
         """
         获取标准化的交易对和交易方向
@@ -296,11 +304,11 @@ class ArbitrageEngine:
                 self.logger.debug(f"无法获取 {pair} 的任何订单簿数据，跳过此轮套利检查")
                 return opportunities
         
-        # 数据一致性检查（仅在严格模式下启用）
-        # 对于监控界面，我们希望始终显示分析结果，即使数据不够新鲜
-        # if not self.validate_data_consistency(orderbooks):
-        #     self.logger.debug("数据时间一致性检查失败，跳过此轮套利检查")
-        #     return opportunities
+        # 数据一致性检查（自动交易模式下强制启用）
+        if self.strict_data_check:
+            if not self.validate_data_consistency(orderbooks):
+                self.logger.warning("数据时间一致性检查失败，跳过此轮套利检查（strict模式）")
+                return opportunities
         
         # 检查所有配置的路径
         for path_name, path_config in self.paths.items():

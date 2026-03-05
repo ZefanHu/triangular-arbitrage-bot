@@ -5,6 +5,7 @@
 """
 
 import time
+from decimal import Decimal, ROUND_DOWN, ROUND_UP
 from utils.logger import setup_logger
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
@@ -15,6 +16,21 @@ import threading
 from core.okx_client import OKXClient
 from models.arbitrage_path import ArbitrageOpportunity
 from models.trade import Trade, TradeStatus, TradeResult, ArbitrageRecord
+
+
+def truncate_size(value: float, lot_sz: Decimal) -> Decimal:
+    """将 size 向下截断到 lotSz 步长（不能四舍五入，否则可能超额）"""
+    d = Decimal(str(value))
+    return (d // lot_sz) * lot_sz
+
+
+def truncate_price(value: float, tick_sz: Decimal, side: str) -> Decimal:
+    """将 price 截断到 tickSz 步长。buy 向上取整，sell 向下取整"""
+    d = Decimal(str(value))
+    if side == 'buy':
+        return (d / tick_sz).to_integral_value(rounding=ROUND_UP) * tick_sz
+    else:
+        return (d / tick_sz).to_integral_value(rounding=ROUND_DOWN) * tick_sz
 
 
 class BalanceCache:
@@ -297,10 +313,23 @@ class TradeExecutor:
                     record.success = False
                     record.end_time = datetime.now().timestamp()
                     self.trade_records.append(record)
+
+                    # 如果已有成功的前序腿，尝试回收中间资产
+                    recovery_result = None
+                    if i > 0 and current_asset != start_asset:
+                        recovery_result = self._attempt_recovery(
+                            current_asset, current_amount, start_asset
+                        )
+                        self._save_failure_alert(
+                            opportunity, record, i, trade_results,
+                            current_asset, current_amount, recovery_result
+                        )
+
                     return {
                         'success': False,
                         'error': '资产连续性校验失败，停止执行后续交易',
-                        'trades': trade_results
+                        'trades': trade_results,
+                        'recovery': recovery_result
                     }
 
                 try:
@@ -332,12 +361,24 @@ class TradeExecutor:
                 
                 if not result.success:
                     self.logger.error(f"第 {i+1} 笔交易失败: {result.error_message}")
-                    # 处理失败的交易
                     self._handle_trade_failure(record, i, result)
+
+                    # 如果已有成功的前序腿（i > 0），尝试回收中间资产
+                    recovery_result = None
+                    if i > 0 and current_asset != start_asset:
+                        recovery_result = self._attempt_recovery(
+                            current_asset, current_amount, start_asset
+                        )
+                        self._save_failure_alert(
+                            opportunity, record, i, trade_results,
+                            current_asset, current_amount, recovery_result
+                        )
+
                     return {
                         'success': False,
                         'error': f'第 {i+1} 笔交易失败: {result.error_message}',
-                        'trades': trade_results
+                        'trades': trade_results,
+                        'recovery': recovery_result
                     }
                 
                 self.logger.info(f"第 {i+1} 笔交易成功: 成交量 {result.filled_size}, 平均价 {result.avg_price}")
@@ -351,10 +392,23 @@ class TradeExecutor:
                 except ValueError as exc:
                     self.logger.error(f"计算输出资产数量失败: {exc}")
                     self._handle_trade_failure(record, i, result)
+
+                    # 如果已有成功的前序腿，尝试回收中间资产
+                    recovery_result = None
+                    if i > 0 and current_asset != start_asset:
+                        recovery_result = self._attempt_recovery(
+                            current_asset, current_amount, start_asset
+                        )
+                        self._save_failure_alert(
+                            opportunity, record, i, trade_results,
+                            current_asset, current_amount, recovery_result
+                        )
+
                     return {
                         'success': False,
                         'error': f'计算输出资产数量失败: {exc}',
-                        'trades': trade_results
+                        'trades': trade_results,
+                        'recovery': recovery_result
                     }
 
                 self.logger.info(
@@ -472,6 +526,137 @@ class TradeExecutor:
         if record not in self.trade_records:
             self.trade_records.append(record)
 
+    def _attempt_recovery(self, current_asset: str, current_amount: float,
+                         start_asset: str) -> dict:
+        """
+        当三腿交易中途失败时，尝试将中间资产卖回起始资产。
+
+        Args:
+            current_asset: 当前持有的中间资产（如 "BTC"）
+            current_amount: 持有数量
+            start_asset: 起始资产（如 "USDT"）
+
+        Returns:
+            {'success': bool, 'recovered_amount': float, 'error': str}
+        """
+        self.logger.warning(
+            f"🔄 尝试资产回收: 将 {current_amount} {current_asset} 卖回 {start_asset}"
+        )
+
+        if current_asset == start_asset:
+            return {'success': True, 'recovered_amount': current_amount, 'error': ''}
+
+        # 支持的回收路径（覆盖 USDT↔BTC↔ETH 三角）
+        recovery_routes = {
+            ("BTC", "USDT"): ("BTC-USDT", "sell"),
+            ("ETH", "USDT"): ("ETH-USDT", "sell"),
+            ("ETH", "BTC"):  ("ETH-BTC", "sell"),
+        }
+
+        route_key = (current_asset, start_asset)
+        if route_key not in recovery_routes:
+            error = f"无回收路径: {current_asset} → {start_asset}"
+            self.logger.error(error)
+            return {'success': False, 'recovered_amount': 0, 'error': error}
+
+        inst_id, side = recovery_routes[route_key]
+
+        try:
+            # 获取当前市价
+            ticker = self.okx_client.get_ticker(inst_id)
+            if not ticker:
+                error = f"无法获取 {inst_id} 行情"
+                self.logger.error(error)
+                return {'success': False, 'recovered_amount': 0, 'error': error}
+
+            # 用市价的滑点保护价格
+            if side == 'sell':
+                price = ticker['best_bid'] * (1 - self.slippage_tolerance)
+            else:
+                price = ticker['best_ask'] * (1 + self.slippage_tolerance)
+
+            # 计算 size
+            if side == 'sell':
+                size = current_amount
+            else:
+                size = current_amount / price if price > 0 else 0
+
+            if size <= 0:
+                error = "回收数量计算为0"
+                self.logger.error(error)
+                return {'success': False, 'recovered_amount': 0, 'error': error}
+
+            # 精度截断
+            rule = self.okx_client.get_instrument_rule(inst_id)
+            if rule:
+                size = float(truncate_size(size, rule['lotSz']))
+                price = float(truncate_price(price, rule['tickSz'], side))
+                if Decimal(str(size)) < rule['minSz']:
+                    error = f"回收数量 {size} 小于最小要求 {rule['minSz']}"
+                    self.logger.error(error)
+                    return {'success': False, 'recovered_amount': 0, 'error': error}
+
+            self.logger.warning(f"回收下单: {inst_id} {side} {size} @ {price}")
+            result = self._execute_single_trade_with_safety(inst_id, side, size, price)
+
+            if result.success:
+                _, recovered = self._calc_output_amount(inst_id, side, result)
+                self.logger.warning(f"✅ 资产回收成功: 收回 {recovered} {start_asset}")
+                return {'success': True, 'recovered_amount': recovered, 'error': ''}
+            else:
+                error = f"回收交易失败: {result.error_message}"
+                self.logger.error(error)
+                return {'success': False, 'recovered_amount': 0, 'error': error}
+
+        except Exception as e:
+            error = f"回收异常: {e}"
+            self.logger.error(error)
+            return {'success': False, 'recovered_amount': 0, 'error': error}
+
+    def _save_failure_alert(self, opportunity, record, failed_leg_index,
+                            trade_results, current_asset, current_amount,
+                            recovery_result):
+        """将部分执行失败的详情写入告警文件"""
+        import os
+
+        alert = {
+            'timestamp': datetime.now().isoformat(),
+            'path': str(opportunity.path),
+            'failed_leg': failed_leg_index + 1,
+            'total_legs': len(record.trade_results),
+            'current_asset': current_asset,
+            'current_amount': current_amount,
+            'completed_trades': [
+                {
+                    'order_id': r.order_id,
+                    'filled_size': r.filled_size,
+                    'avg_price': r.avg_price,
+                    'success': r.success
+                }
+                for r in trade_results if r.success
+            ],
+            'recovery_attempted': recovery_result is not None,
+            'recovery_success': recovery_result['success'] if recovery_result else False,
+            'recovery_amount': recovery_result.get('recovered_amount', 0) if recovery_result else 0,
+            'recovery_error': recovery_result.get('error', '') if recovery_result else '',
+        }
+
+        alert_file = 'logs/partial_execution_alerts.json'
+        os.makedirs(os.path.dirname(alert_file), exist_ok=True)
+
+        try:
+            alerts = []
+            if os.path.exists(alert_file):
+                with open(alert_file, 'r') as f:
+                    alerts = json.load(f)
+            alerts.append(alert)
+            with open(alert_file, 'w') as f:
+                json.dump(alerts, f, indent=2, ensure_ascii=False)
+            self.logger.warning(f"⚠️ 部分执行告警已保存到 {alert_file}")
+        except Exception as e:
+            self.logger.error(f"保存告警文件失败: {e}")
+            self.logger.error(f"告警内容: {alert}")
+
     def _post_trade_processing(self, trade: Trade, result: TradeResult) -> None:
         """
         交易后处理，更新交易信息并记录日志
@@ -512,7 +697,20 @@ class TradeExecutor:
             
             # 优化价格以提高成交概率
             optimized_price = self._optimize_price_for_trade(inst_id, side, price, ticker)
-            
+
+            # 精度截断
+            rule = self.okx_client.get_instrument_rule(inst_id)
+            if rule:
+                size = float(truncate_size(size, rule['lotSz']))
+                optimized_price = float(truncate_price(optimized_price, rule['tickSz'], side))
+                if Decimal(str(size)) < rule['minSz']:
+                    return TradeResult(
+                        success=False,
+                        error_message=f"下单数量 {size} 小于最小要求 {rule['minSz']}"
+                    )
+            else:
+                self.logger.warning(f"未找到 {inst_id} 的精度规则，使用原始精度下单")
+
             # 尝试下单
             for attempt in range(self.max_retries):
                 self.logger.info(f"第 {attempt + 1} 次尝试下单: {inst_id} {side} {size} @ {optimized_price}")
@@ -534,6 +732,8 @@ class TradeExecutor:
                             optimized_price *= 1.001  # 买入时稍微提高价格
                         else:
                             optimized_price *= 0.999  # 卖出时稍微降低价格
+                        if rule:
+                            optimized_price = float(truncate_price(optimized_price, rule['tickSz'], side))
                     continue
                 
                 self.logger.info(f"下单成功，订单ID: {order_id}")
@@ -640,15 +840,33 @@ class TradeExecutor:
             
             # 超时，尝试撤单
             self.logger.warning(f"订单 {order_id} 等待超时，尝试撤单")
-            cancel_success = self.okx_client.cancel_order(inst_id, order_id)
-            if cancel_success:
-                self.logger.info(f"超时撤单成功: {order_id}")
-            else:
-                self.logger.warning(f"超时撤单失败: {order_id}")
-                
+            self.okx_client.cancel_order(inst_id, order_id)
+
+            # 撤单后再查一次最终状态，捕获部分成交
+            time.sleep(0.2)
+            final_status = self.okx_client.get_order_status(inst_id, order_id)
+            if final_status:
+                final_filled = final_status.get('filled_size', 0)
+                final_avg_price = final_status.get('avg_price', 0)
+                final_state = final_status.get('state', '')
+
+                # 如果有部分成交，视为成功（用实际成交量继续后续腿）
+                if final_filled > 0 and final_avg_price and final_avg_price > 0:
+                    self.logger.warning(
+                        f"订单 {order_id} 超时但部分成交: {final_filled} @ {final_avg_price} (状态: {final_state})"
+                    )
+                    return TradeResult(
+                        success=True,
+                        order_id=order_id,
+                        filled_size=final_filled,
+                        avg_price=final_avg_price,
+                        fee=float(final_status.get('fee', 0) or 0),
+                        fee_currency=str(final_status.get('fee_currency', '') or ''),
+                    )
+
             return TradeResult(
                 success=False,
-                error_message="订单等待超时"
+                error_message="订单等待超时且无成交"
             )
             
         except Exception as e:

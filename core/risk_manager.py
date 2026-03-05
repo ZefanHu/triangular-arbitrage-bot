@@ -68,7 +68,12 @@ class RiskManager:
         self.balance_cache = {}
         self.balance_cache_time = 0
         self.balance_cache_ttl = 60.0
-        
+
+        # 实时价格缓存（用于资产换算）
+        self._price_cache: Dict[str, float] = {}
+        self._price_cache_time: float = 0
+        self._price_cache_ttl: float = 15.0  # 15秒刷新一次，风控不需要毫秒级实时性
+
         self.logger.info("风险管理器初始化完成")
         self.logger.info(f"风险参数: 最大仓位比例={self.max_position_ratio}, 最大单笔交易比例={self.max_single_trade_ratio}, 最小套利间隔={self.min_arbitrage_interval}秒")
     
@@ -643,21 +648,50 @@ class RiskManager:
             self.logger.error(f"获取当前余额异常: {e}")
             return self.balance_cache or {}
     
+    def _refresh_price_cache(self) -> None:
+        """从 OKX API 刷新资产价格缓存"""
+        if self.okx_client is None:
+            return
+
+        import time as _time
+        now = _time.time()
+        if now - self._price_cache_time < self._price_cache_ttl:
+            return  # 缓存未过期
+
+        # 需要换算的资产及其对应的 USDT 交易对
+        pairs = {"BTC": "BTC-USDT", "ETH": "ETH-USDT"}
+
+        for asset, inst_id in pairs.items():
+            try:
+                ticker = self.okx_client.get_ticker(inst_id)
+                if ticker and ticker.get('last_price', 0) > 0:
+                    self._price_cache[asset] = ticker['last_price']
+            except Exception as e:
+                self.logger.debug(f"获取{asset}价格失败: {e}")
+
+        if self._price_cache:
+            self._price_cache_time = now
+            self.logger.debug(f"价格缓存已更新: {self._price_cache}")
+
     def _convert_to_usdt(self, asset: str, amount: float) -> float:
         """转换为USDT价值"""
         try:
-            if asset == "USDT":
+            if asset in ("USDT", "USDC"):
                 return amount
-            elif asset == "BTC":
-                return amount * 50000.0  # 假设BTC价格
-            elif asset == "ETH":
-                return amount * 3000.0   # 假设ETH价格
-            elif asset == "BNB":
-                return amount * 500.0    # 假设BNB价格
-            elif asset == "USDC":
-                return amount * 1.0      # USDC约等于USDT
-            else:
-                return amount * 100.0    # 其他资产默认价格
+
+            # 尝试使用实时价格
+            self._refresh_price_cache()
+            if asset in self._price_cache:
+                return amount * self._price_cache[asset]
+
+            # fallback：硬编码（并警告）
+            fallback = {"BTC": 50000.0, "ETH": 3000.0, "BNB": 500.0}
+            if asset in fallback:
+                self.logger.warning(f"使用硬编码价格换算{asset}，可能不准确")
+                return amount * fallback[asset]
+
+            self.logger.warning(f"未知资产{asset}，使用默认价格100")
+            return amount * 100.0
         except Exception as e:
             self.logger.error(f"转换为USDT异常: {e}")
             return 0.0
@@ -665,18 +699,20 @@ class RiskManager:
     def _convert_from_usdt(self, asset: str, usdt_amount: float) -> float:
         """从USDT价值转换为资产数量"""
         try:
-            if asset == "USDT":
+            if asset in ("USDT", "USDC"):
                 return usdt_amount
-            elif asset == "BTC":
-                return usdt_amount / 50000.0
-            elif asset == "ETH":
-                return usdt_amount / 3000.0
-            elif asset == "BNB":
-                return usdt_amount / 500.0
-            elif asset == "USDC":
-                return usdt_amount / 1.0
-            else:
-                return usdt_amount / 100.0
+
+            self._refresh_price_cache()
+            if asset in self._price_cache and self._price_cache[asset] > 0:
+                return usdt_amount / self._price_cache[asset]
+
+            fallback = {"BTC": 50000.0, "ETH": 3000.0, "BNB": 500.0}
+            if asset in fallback:
+                self.logger.warning(f"使用硬编码价格换算{asset}，可能不准确")
+                return usdt_amount / fallback[asset]
+
+            self.logger.warning(f"未知资产{asset}，使用默认价格100")
+            return usdt_amount / 100.0
         except Exception as e:
             self.logger.error(f"从USDT转换异常: {e}")
             return 0.0
