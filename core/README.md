@@ -20,8 +20,8 @@ core/
 
 **主要类：** `ArbitrageEngine`、`ArbitrageOpportunity`
 
-**功能描述：**  
-负责分析市场数据，识别和计算三角套利机会。支持多种配置格式，包括JSON格式的显式交易对配置。
+**功能描述：**
+负责分析市场数据，识别和计算三角套利机会。支持多种配置格式，包括JSON格式的显式交易对配置。支持严格数据校验模式（`strict_data_check`），启用后在数据不一致时拒绝输出机会。
 
 **核心方法：**
 - `find_opportunities() -> List[Dict]`
@@ -37,6 +37,10 @@ core/
   - 功能：计算指定路径和金额的利润
   - 参数：path - 交易路径，amount - 初始金额
   - 返回：(最终金额, 利润率) 元组
+
+- `set_strict_data_check(enabled: bool) -> None`
+  - 功能：开启/关闭严格数据校验模式；启用后数据不一致时拒绝输出套利机会（主链路启动时默认启用）
+  - 参数：enabled - 是否启用
 
 **使用示例：**
 ```python
@@ -107,6 +111,11 @@ balance = collector.get_balance()
   - 参数：inst_id - 产品ID，side - 订单方向(buy/sell)，order_type - 订单类型，size - 委托数量，price - 委托价格
   - 返回：订单ID
 
+- `get_instrument_rule(inst_id: str) -> Optional[Dict]`
+  - 功能：获取交易对精度规则（lot_sz、tick_sz 等），数据来自启动时缓存的 `instrument_rules`
+  - 参数：inst_id - 产品ID
+  - 返回：精度规则字典（含 `lotSz`、`tickSz`），无规则时返回 None
+
 **使用示例：**
 ```python
 # 初始化客户端
@@ -157,12 +166,16 @@ if result.passed:
 
 **主要类：** `TradeExecutor`、`BalanceCache`、`TradeResult`、`ArbitrageRecord`
 
-**功能描述：**  
-负责执行套利交易，包括下单、监控订单状态、处理超时等。
+**模块级函数：**
+- `truncate_size(value: float, lot_sz: Decimal) -> Decimal` - 按 lot_sz 向下截断数量，确保委托数量精度合规
+- `truncate_price(value: float, tick_sz: Decimal, side: str) -> Decimal` - 按 tick_sz 截断价格（买单保守向下、卖单保守向上）
+
+**功能描述：**
+负责执行套利交易，包括下单、监控订单状态、处理超时和部分成交、触发失败腿的资产回收等。
 
 **核心方法：**
 - `execute_arbitrage(opportunity: ArbitrageOpportunity, investment_amount: float) -> Dict[str, any]`
-  - 功能：执行套利交易
+  - 功能：执行套利交易（包含精度截断、部分成交处理、失败腿回收）
   - 参数：opportunity - 套利机会，investment_amount - 投资金额
   - 返回：执行结果字典
 
@@ -170,6 +183,12 @@ if result.passed:
   - 功能：执行单笔交易
   - 参数：inst_id - 交易对ID，side - 交易方向，size - 交易数量，price - 交易价格
   - 返回：交易结果
+
+- `_attempt_recovery(current_asset: str, current_amount: float, ...) -> None`
+  - 功能：中间腿失败后尝试将持仓资产回售以减少损失
+
+- `_save_failure_alert(opportunity, record, failed_leg_index, ...) -> None`
+  - 功能：将部分执行失败信息持久化到 `logs/partial_execution_alerts.json` 供事后分析
 
 **使用示例：**
 ```python

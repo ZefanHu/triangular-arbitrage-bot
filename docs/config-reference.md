@@ -24,6 +24,7 @@ Source of truth: `config/config_manager.py` (SETTINGS_SCHEMA / DYNAMIC_KEY_RULES
 | initial_usdt | float | 0.0 | >= 0 | 初始 USDT 余额。 |
 | initial_usdc | float | 0.0 | >= 0 | 初始 USDC 余额。 |
 | initial_btc | float | 0.0 | >= 0 | 初始 BTC 余额。 |
+| initial_eth | float | 0.0 | >= 0 | 初始 ETH 余额。 |
 | fee_rate | float | 0.001 | 0–1 | 默认手续费率。 |
 | slippage_tolerance | float | 0.002 | 0–0.02 | 滑点容忍度（用于每一腿下单价格的保守调整）。 |
 | min_profit_threshold | float | 0.003 | 0–0.05 | 最小套利收益阈值。 |

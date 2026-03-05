@@ -58,7 +58,8 @@
   - `find_opportunities()`
   - `calculate_arbitrage_from_steps()` / `calculate_path_profit()`
   - `validate_data_consistency()`
-  - `start_monitoring()` / `stop_monitoring()`（线程监控模式）
+  - `set_strict_data_check(enabled: bool)`（严格数据校验模式，主链路启动时默认启用）
+  - `start_monitoring()` / `stop_monitoring()`（线程监控模式，主链路不使用）
 - **依赖**：DataCollector、ConfigManager、ArbitragePath/ArbitrageOpportunity。
 
 ### RiskManager
@@ -73,15 +74,17 @@
 - **依赖**：ConfigManager、（可选）OKXClient、ArbitrageOpportunity。
 
 ### TradeExecutor
-- **职责**：执行套利交易（下单/撤单/等待成交）并产出结果记录。
+- **职责**：执行套利交易（下单/撤单/等待成交）并产出结果记录；包含精度截断、部分成交处理、失败腿资产回收与告警持久化。
 - **输入**：ArbitrageOpportunity、投资金额。
 - **输出**：交易执行结果字典、TradeResult 列表、ArbitrageRecord。
+- **模块级函数**：`truncate_size()` / `truncate_price()`（精度截断，供下单前调用）。
 - **关键方法**：
   - `execute_arbitrage()`
   - `_execute_single_trade()` / `_wait_order_filled()`
   - `_generate_trades()` / `get_balance_check()`
+  - `_attempt_recovery()`（中间腿失败后尝试资产回售）
+  - `_save_failure_alert()`（部分执行失败信息持久化到 `logs/partial_execution_alerts.json`）
 - **依赖**：OKXClient、ArbitrageOpportunity、Trade/TradeResult。
-- **注意**：`execute_arbitrage()` 调用的 `_execute_single_trade_with_safety()` / `_handle_trade_failure()` / `_post_trade_processing()` 已在 `TradeExecutor` 内定义。
 
 ## 架构关系图（Mermaid）
 

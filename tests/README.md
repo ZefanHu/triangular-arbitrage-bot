@@ -75,7 +75,70 @@ python3 tests/test_run_core.py --coverage
 - 测试报告：`tests/reports/core_test_report_YYYYMMDD_HHMMSS.json`
 - 覆盖率报告：`tests/reports/core_coverage_html/index.html`（使用--coverage参数时生成）
 
-### 3. test_misc.py - 专项测试集合
+### 3. test_slippage_and_config.py - 滑点与配置校验测试
+**用途**: 本地配置解析与套利利润计算的单元测试，无需网络连接与 API 凭据
+
+**测试内容**:
+- 配置 schema 校验与 fail-fast 行为
+- slippage_tolerance 在下单价格中的应用（买单/卖单方向）
+- 利润率计算逻辑
+
+**运行方式**:
+```bash
+# 需要 pytest
+python -m pytest tests/test_slippage_and_config.py -v
+```
+
+### 4. test_precision.py - 精度截断函数测试
+**用途**: 测试 `truncate_size` 和 `truncate_price` 两个精度截断工具函数
+
+**测试内容**:
+- 向下截断（lot_sz / tick_sz 精度对齐）
+- 买单/卖单价格方向正确性
+
+**运行方式**:
+```bash
+python3 tests/test_precision.py
+```
+
+**输出文件**:
+- 日志文件：`tests/logs/test_precision_YYYYMMDD_HHMMSS.log`
+
+### 5. test_leg_recovery.py - 三腿失败回收集成测试
+**用途**: 测试三腿套利中间腿失败时的资产回收逻辑
+
+**测试内容**:
+- `_wait_order_filled` 部分成交处理
+- `_attempt_recovery` 资产回收流程
+- `execute_arbitrage` 中间腿失败触发回收
+- `_save_failure_alert` 告警文件持久化
+
+**运行方式**:
+```bash
+python3 tests/test_leg_recovery.py
+```
+
+**输出文件**:
+- 日志文件：`tests/logs/test_leg_recovery_YYYYMMDD_HHMMSS.log`
+
+### 6. test_trade_amount_flow.py - 交易数量与资产流转测试
+**用途**: 验证买单/卖单的输入输出资产与金额计算正确性
+
+**运行方式**:
+```bash
+python3 tests/test_trade_amount_flow.py
+```
+
+### 7. test_environment_gate.py - 环境入口校验测试
+**用途**: 测试系统启动时对 API 凭据的校验行为（Monitor Mode 允许无凭据启动，Auto Mode 拒绝）
+
+**运行方式**:
+```bash
+# 依赖 pytest
+python -m pytest tests/test_environment_gate.py -v
+```
+
+### 8. test_misc.py - 专项测试集合
 **用途**: 套利系统的专项测试集合
 
 **测试内容**:
@@ -187,6 +250,8 @@ python -m unittest discover tests -v
 | test_models.py | tests/logs/test_models_*.log | 覆盖率报告 |
 | test_run_core.py | tests/logs/test_core_*.log | 测试报告JSON、覆盖率报告 |
 | test_misc.py | tests/logs/test_misc_*.log | 套利分析JSON |
+| test_precision.py | tests/logs/test_precision_*.log | - |
+| test_leg_recovery.py | tests/logs/test_leg_recovery_*.log | 告警JSON（logs/partial_execution_alerts.json） |
 
 ### 5. 并行测试
 - 避免同时运行多个测试文件，可能导致 API 限流
@@ -222,11 +287,16 @@ python3 tests/test_run_core.py --coverage
 
 ## 测试执行总结
 
-| 测试文件 | 默认模式 | 完整模式 | 覆盖率报告 | 预计耗时 |
-|---------|---------|---------|-----------|---------|
-| test_models.py | ✓ | ✓ | ✓ | 基础:10s / 完整:30s |
-| test_run_core.py | ✓ | ✓ | ✓ | 基础:60s / 完整:3-5分钟 |
-| test_misc.py | ✓ | - | - | 每个测试:1-2分钟 |
+| 测试文件 | 运行方式 | 覆盖率报告 | 预计耗时 |
+|---------|---------|-----------|---------|
+| test_models.py | unittest / --full / --coverage | ✓ | 基础:10s / 完整:30s |
+| test_run_core.py | unittest / --full / --coverage | ✓ | 基础:60s / 完整:3-5分钟 |
+| test_misc.py | unittest | - | 每个测试:1-2分钟 |
+| test_slippage_and_config.py | pytest | - | <5s |
+| test_precision.py | unittest | - | <5s |
+| test_leg_recovery.py | unittest | - | <10s |
+| test_trade_amount_flow.py | unittest | - | <5s |
+| test_environment_gate.py | pytest | - | <5s |
 
 ## 故障排查
 
